@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torchvision.utils as vutils
 from tensorboardX import SummaryWriter
+import wandb
 
 from trainer import Trainer
 from data.dataset import Dataset
@@ -18,6 +19,7 @@ from utils.logger import get_logger
 parser = ArgumentParser()
 parser.add_argument('--config', type=str, default='config.yaml', help="training configuration")
 parser.add_argument('--seed', type=int, default=42, help='manual seed')
+parser.add_argument('--wandb', action='store_true', default=True, help='use wandb for logging')
 
 
 def main():
@@ -40,6 +42,9 @@ def main():
     shutil.copy(args.config, os.path.join(checkpoint_path, os.path.basename(args.config)))
     writer = SummaryWriter(logdir=checkpoint_path)
     logger = get_logger(checkpoint_path)    # get logger and configure it at the first call
+    if args.wandb:
+        wandb.init(project='InpaintExploration', config=config, name=config['expname'], entity='ezo', resume='allow',
+                   id=None, notes=None)
 
     logger.info("Arguments: {}".format(args))
     # Set random seed
@@ -121,16 +126,22 @@ def main():
             # Log and visualization
             log_losses = ['l1', 'ae', 'wgan_g', 'wgan_d', 'wgan_gp', 'g', 'd']
             if iteration % config['print_iter'] == 0:
-                time_count = time.time() - time_count
-                speed = config['print_iter'] / time_count
+                elapsed = time.time() - time_count
+                speed = config['print_iter'] / elapsed
                 speed_msg = 'speed: %.2f batches/s ' % speed
                 time_count = time.time()
 
                 message = 'Iter: [%d/%d] ' % (iteration, config['niter'])
+                wandb_log = {}
                 for k in log_losses:
                     v = losses.get(k, 0.)
+                    k = 'loss/' + k
+                    wandb_log[k] = v
                     writer.add_scalar(k, v, iteration)
                     message += '%s: %.6f ' % (k, v)
+                if args.wandb:
+                    wandb_log['speed'] = speed
+                    wandb.log(wandb_log, step=iteration)
                 message += speed_msg
                 logger.info(message)
 
