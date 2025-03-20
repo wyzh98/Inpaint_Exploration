@@ -34,7 +34,7 @@ class Dataset(data.Dataset):
             raise ValueError
 
         width, height = img.size
-        if width < self.image_shape[0] or height < self.image_shape[1]:
+        if width < self.image_shape[0] and height < self.image_shape[1]:
             pad_left = (self.image_shape[0] - width) // 2
             pad_top = (self.image_shape[1] - height) // 2
             pad_right = self.image_shape[0] - width - pad_left
