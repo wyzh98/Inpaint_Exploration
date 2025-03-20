@@ -44,7 +44,8 @@ class Dataset(data.Dataset):
             img = transforms.Resize(self.image_shape)(img)
         # img = transforms.RandomCrop(self.image_shape)(img)
         img = transforms.ToTensor()(img)  # turn the image to a tensor
-        img = normalize(img)
+        if img_type != 'mask':
+            img = normalize(img)
         return img
 
     def __getitem__(self, index):

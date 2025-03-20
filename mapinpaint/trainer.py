@@ -4,8 +4,7 @@ import torch.nn as nn
 from torch import autograd
 from model.networks import Generator, LocalDis, GlobalDis
 
-
-from utils.tools import get_model_list, local_patch, spatial_discounting_mask
+from utils.tools import get_model_list, spatial_discounting_mask
 from utils.logger import get_logger
 
 logger = get_logger()
@@ -38,11 +37,8 @@ class Trainer(nn.Module):
         losses = {}
 
         x1, x2, offset_flow = self.netG(x, masks)
-        # local_patch_gt = local_patch(ground_truth, bboxes)
         x1_inpaint = x1 * masks + x * (1. - masks)
         x2_inpaint = x2 * masks + x * (1. - masks)
-        # local_patch_x1_inpaint = local_patch(x1_inpaint, bboxes)
-        # local_patch_x2_inpaint = local_patch(x2_inpaint, bboxes)
 
         # D part
         # wgan d loss

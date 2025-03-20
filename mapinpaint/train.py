@@ -16,9 +16,8 @@ from utils.tools import get_config
 from utils.logger import get_logger
 
 parser = ArgumentParser()
-parser.add_argument('--config', type=str, default='configs/config.yaml',
-                    help="training configuration")
-parser.add_argument('--seed', type=int, help='manual seed')
+parser.add_argument('--config', type=str, default='config.yaml', help="training configuration")
+parser.add_argument('--seed', type=int, default=42, help='manual seed')
 
 
 def main():
@@ -35,7 +34,7 @@ def main():
         cudnn.benchmark = True
 
     # Configure checkpoint path
-    checkpoint_path = os.path.join('checkpoints', config['expname'])
+    checkpoint_path = os.path.join('../checkpoints', config['expname'])
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path)
     shutil.copy(args.config, os.path.join(checkpoint_path, os.path.basename(args.config)))
@@ -65,9 +64,9 @@ def main():
                                                    num_workers=config['num_workers'])
         # Define the trainer
         trainer = Trainer(config)
-        logger.info("\n{}".format(trainer.netG))
-        logger.info("\n{}".format(trainer.localD))
-        logger.info("\n{}".format(trainer.globalD))
+        # logger.info("\n{}".format(trainer.netG))
+        # logger.info("\n{}".format(trainer.localD))
+        # logger.info("\n{}".format(trainer.globalD))
 
         if cuda:
             trainer = nn.parallel.DataParallel(trainer, device_ids=device_ids)
@@ -139,9 +138,9 @@ def main():
                 viz_max_out = config['viz_max_out']
                 if x.size(0) > viz_max_out:
                     viz_images = torch.stack([x[:viz_max_out], inpainted_result[:viz_max_out],
-                                              offset_flow[:viz_max_out]], dim=1)
+                                              ground_truth[:viz_max_out]], dim=1)
                 else:
-                    viz_images = torch.stack([x, inpainted_result, offset_flow], dim=1)
+                    viz_images = torch.stack([x, inpainted_result, ground_truth], dim=1)
                 viz_images = viz_images.view(-1, *list(x.size())[1:])
                 vutils.save_image(viz_images,
                                   '%s/niter_%03d.png' % (checkpoint_path, iteration),
