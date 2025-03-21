@@ -17,6 +17,15 @@ def pil_loader(path):
 def default_loader(path):
     return pil_loader(path)
 
+def mask_loader(path):
+    with open(path, 'rb') as f:
+        img = Image.open(f)
+        img_np = np.array(img)
+        img_np[img_np != 127] = 0
+        img_np[img_np == 127] = 255
+        img = Image.fromarray(img_np)
+        return img
+
 def ground_truth_loader(path):
     with open(path, 'rb') as f:
         img = Image.open(f)

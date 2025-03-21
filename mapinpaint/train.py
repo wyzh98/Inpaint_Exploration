@@ -62,7 +62,8 @@ def main():
     try:
         logger.info("Training on: {}".format(config['train_data_path']))
         train_dataset = Dataset(data_path=config['train_data_path'],
-                                image_shape=config['image_shape'])
+                                image_shape=config['image_shape'],
+                                data_aug=True)
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                    batch_size=config['batch_size'],
                                                    shuffle=True,

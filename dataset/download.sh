@@ -1,6 +1,6 @@
 #!/bin/bash
 
-INPAINT_URL="https://www.dropbox.com/scl/fi/htifzvxjewg637magznr4/maps_train_inpaint1000.zip?rlkey=n7ju0a1ut4da4voxzp92mq2d1&st=tirhlyj1&dl=1"
+INPAINT_URL="https://www.dropbox.com/scl/fi/hwknf4yhub6zw3t3fzggz/maps_train_inpaint1000.zip?rlkey=tv5dsrlgpfvb7yz7ufetnsbh4&st=3awdhbgq&dl=1"
 ZIP_FILE="maps_train_inpaint.zip"
 
 

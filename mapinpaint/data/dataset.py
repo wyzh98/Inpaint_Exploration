@@ -4,22 +4,21 @@ import numpy as np
 import torch.utils.data as data
 from os import listdir
 from PIL import Image
-from attr.filters import exclude
 
-from utils.tools import default_loader, ground_truth_loader, is_image_file, normalize
+from utils.tools import default_loader, mask_loader, ground_truth_loader, is_image_file, normalize
 import os
 
 import torchvision.transforms as transforms
 
 
 class Dataset(data.Dataset):
-    def __init__(self, data_path, image_shape):
+    def __init__(self, data_path, image_shape, data_aug):
         super(Dataset, self).__init__()
         self.ground_truth = [x for x in listdir(f"{data_path}/full") if is_image_file(x)]
         self.partial_map = [x for x in listdir(f"{data_path}/part") if is_image_file(x)]
-        self.map_mask = [x for x in listdir(f"{data_path}/mask") if is_image_file(x)]
         self.data_path = data_path
         self.image_shape = image_shape[:-1]
+        self.data_aug = data_aug
 
     @staticmethod
     def rotate_img(img, rot):
@@ -32,12 +31,12 @@ class Dataset(data.Dataset):
         return rotations[rot](img)
 
     def crop_img(self, path, img_type=None, rotation=0):
-        if img_type == 'mask':
-            img = default_loader(path)
-            img = img.convert('1')
-        elif img_type == 'belief':
+        if img_type == 'belief':
             img = default_loader(path)
             img = img.convert('L')
+        elif img_type == 'mask':
+            img = mask_loader(path)
+            img = img.convert('1')
         elif img_type == 'gt':
             img = ground_truth_loader(path)
             img = img.convert('L')
@@ -62,9 +61,9 @@ class Dataset(data.Dataset):
         return img
 
     def __getitem__(self, index):
-        data_aug = random.choice([0, 90, 180, 270])
+        data_aug = random.choice([0, 90, 180, 270]) if self.data_aug else 0
         partial_img = self.crop_img(os.path.join(f"{self.data_path}/part", self.partial_map[index]), img_type='belief', rotation=data_aug)
-        mask_img = self.crop_img(os.path.join(f"{self.data_path}/mask", self.map_mask[index]), img_type='mask', rotation=data_aug)
+        mask_img = self.crop_img(os.path.join(f"{self.data_path}/part", self.partial_map[index]), img_type='mask', rotation=data_aug)
         map_name = '_'.join(self.partial_map[index].split('_')[:-1])
         ground_truth = self.crop_img(os.path.join(f"{self.data_path}/full", f"{map_name}.png"), img_type='gt', rotation=data_aug)
         return ground_truth, partial_img, mask_img
