@@ -12,6 +12,7 @@ from utils.tools import get_config
 
 
 def main():
+    map_size = [250, 250]
     run_path = '../checkpoints/wgan_1616_noL1'
     checkpoint_path = f'{run_path}/gen_00400000.pt'
     config_path = f'{run_path}/config.yaml'
@@ -66,6 +67,16 @@ def main():
             ground_truth = ground_truth.cuda()
         x_out = netG(x, mask)
         inpainted_result = x_out * mask + x * (1. - mask)
+
+        width, height = x.size(2), x.size(3)
+        if map_size[0] < width and map_size[1] < height:
+            i_left = (width - map_size[0]) // 2
+            i_top = (height - map_size[1]) // 2
+            i_right = i_left + map_size[0]
+            i_bottom = i_top + map_size[1]
+            x = x[:, :, i_left:i_right, i_top:i_bottom]
+            ground_truth = ground_truth[:, :, i_left:i_right, i_top:i_bottom]
+            inpainted_result = inpainted_result[:, :, i_left:i_right, i_top:i_bottom]
 
         explored_rate = ((x > 0.99).sum() / (ground_truth > 0.99).sum()).item()
         mae = F.l1_loss(inpainted_result, ground_truth).item()

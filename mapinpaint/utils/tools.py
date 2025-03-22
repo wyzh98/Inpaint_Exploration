@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 
 import torch.nn.functional as F
+from scipy.ndimage import distance_transform_edt
 
 
 def pil_loader(path):
@@ -193,38 +194,29 @@ def mask_image(x, bboxes, config, mask_type='hole'):
     return result, mask
 
 
-def spatial_discounting_mask(config):
-    """Generate spatial discounting mask constant.
+def spatial_discounting_mask(config, masks):
+    """Generate spatial discounting mask.
 
     Spatial discounting mask is first introduced in publication:
         Generative Image Inpainting with Contextual Attention, Yu et al.
-
-    Args:
-        config: Config should have configuration including HEIGHT, WIDTH,
-            DISCOUNTED_MASK.
+    We reimplement the spatial mask to dynamically adapt to the shape of our irregular mask.
 
     Returns:
         tf.Tensor: spatial discounting mask
 
     """
     gamma = config['spatial_discounting_gamma']
-    height, width = config['mask_shape']
-    shape = [1, 1, height, width]
-    if config['discounted_mask']:
-        mask_values = np.ones((height, width))
-        for i in range(height):
-            for j in range(width):
-                mask_values[i, j] = max(
-                    gamma ** min(i, height - i),
-                    gamma ** min(j, width - j))
-        mask_values = np.expand_dims(mask_values, 0)
-        mask_values = np.expand_dims(mask_values, 0)
-    else:
-        mask_values = np.ones(shape)
-    spatial_discounting_mask_tensor = torch.tensor(mask_values, dtype=torch.float32)
+    masks_np = masks.detach().cpu().numpy()
+    B, C, H, W = masks_np.shape
+    spatial_discount_mask = np.zeros((B, H, W), dtype=np.float32)
+    for i in range(B):
+        distance = distance_transform_edt(masks_np[i, 0])
+        spatial_discount_mask[i] = np.power(gamma, distance)
+    spatial_discount_mask = spatial_discount_mask[:, np.newaxis, :, :]
+    spatial_discount_mask_tensor = torch.tensor(spatial_discount_mask, dtype=torch.float32)
     if config['cuda']:
-        spatial_discounting_mask_tensor = spatial_discounting_mask_tensor.cuda()
-    return spatial_discounting_mask_tensor
+        spatial_discount_mask_tensor = spatial_discount_mask_tensor.cuda()
+    return spatial_discount_mask_tensor
 
 
 def reduce_mean(x, axis=None, keepdim=False):

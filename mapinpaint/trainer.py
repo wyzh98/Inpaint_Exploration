@@ -48,8 +48,8 @@ class Trainer(nn.Module):
 
         # G part
         if compute_loss_g:
-            # sd_mask = spatial_discounting_mask(self.config)
-            # losses['l1'] = l1_loss(x_inpaint * sd_mask, ground_truth * sd_mask)
+            sd_mask = spatial_discounting_mask(self.config, masks)
+            losses['l1'] = l1_loss(x_inpaint * sd_mask, ground_truth * sd_mask)
             losses['ae'] = l1_loss(x_out * (1. - masks), ground_truth * (1. - masks))
 
             # wgan g loss
