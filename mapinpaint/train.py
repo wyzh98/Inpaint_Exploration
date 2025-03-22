@@ -121,7 +121,6 @@ def main():
                 trainer_module.optimizer_d.zero_grad()
                 losses['d'] = losses['wgan_d'] + losses['wgan_gp'] * config['wgan_gp_lambda']
                 losses['d'].backward()
-                trainer_module.optimizer_d.step()
 
                 # Update G
                 if compute_g_loss:
@@ -130,6 +129,7 @@ def main():
                                   losses['wgan_g'] * config['gan_loss_alpha']
                     losses['g'].backward()
                     trainer_module.optimizer_g.step()
+                trainer_module.optimizer_d.step()  # put at last to prevent inplace op
 
             # Log and visualization
             log_losses = ['ae', 'wgan_g', 'wgan_d', 'wgan_gp', 'g', 'd']

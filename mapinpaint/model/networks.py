@@ -175,15 +175,15 @@ class Conv2dBlock(nn.Module):
 
         # initialize activation
         if activation == 'relu':
-            self.activation = nn.ReLU()
+            self.activation = nn.ReLU(inplace=True)
         elif activation == 'elu':
-            self.activation = nn.ELU()
+            self.activation = nn.ELU(inplace=True)
         elif activation == 'lrelu':
-            self.activation = nn.LeakyReLU(0.2)
+            self.activation = nn.LeakyReLU(0.2, inplace=True)
         elif activation == 'prelu':
             self.activation = nn.PReLU()
         elif activation == 'selu':
-            self.activation = nn.SELU()
+            self.activation = nn.SELU(inplace=True)
         elif activation == 'tanh':
             self.activation = nn.Tanh()
         elif activation == 'none':
