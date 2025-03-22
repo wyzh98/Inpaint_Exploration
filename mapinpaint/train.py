@@ -21,7 +21,7 @@ from utils.logger import get_logger
 parser = ArgumentParser()
 parser.add_argument('--config', type=str, default='config.yaml', help="training configuration")
 parser.add_argument('--seed', type=int, default=42, help='manual seed')
-parser.add_argument('--wandb', action='store_true', default=True, help='use wandb for logging')
+parser.add_argument('--wandb', action='store_true', help='use wandb for logging')
 
 
 def main():
@@ -152,7 +152,7 @@ def main():
                         x = x.cuda()
                         mask = mask.cuda()
                         ground_truth = ground_truth.cuda()
-                    metrics = evaluator.eval_step(x, mask, ground_truth, eval_dataset.image_raw_shape)
+                    metrics, _ = evaluator.eval_step(x, mask, ground_truth, eval_dataset.image_raw_shape)
                     for k in eval_metrics.keys():
                         eval_metrics[k].append(metrics[k])
                 message = 'Eval: [%d] ' % iteration
