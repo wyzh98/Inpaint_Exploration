@@ -19,6 +19,7 @@ class Dataset(data.Dataset):
         self.data_path = data_path
         self.image_shape = image_shape[:-1]
         self.data_aug = data_aug
+        self.image_raw_shape = default_loader(os.path.join(f"{data_path}/full", self.ground_truth[0])).size
 
     @staticmethod
     def rotate_img(img, rot):
@@ -45,12 +46,12 @@ class Dataset(data.Dataset):
 
         img = self.rotate_img(img, rotation)
 
-        width, height = img.size
-        if width < self.image_shape[0] and height < self.image_shape[1]:
-            pad_left = (self.image_shape[0] - width) // 2
-            pad_top = (self.image_shape[1] - height) // 2
-            pad_right = self.image_shape[0] - width - pad_left
-            pad_bottom = self.image_shape[1] - height - pad_top
+        self.image_raw_shape = img.size
+        if self.image_raw_shape[0] < self.image_shape[0] and self.image_raw_shape[1] < self.image_shape[1]:
+            pad_left = (self.image_shape[0] - self.image_raw_shape[0]) // 2
+            pad_top = (self.image_shape[1] - self.image_raw_shape[1]) // 2
+            pad_right = self.image_shape[0] - self.image_raw_shape[0] - pad_left
+            pad_bottom = self.image_shape[1] - self.image_raw_shape[1] - pad_top
             img = transforms.Pad((pad_left, pad_top, pad_right, pad_bottom), padding_mode='edge')(img)
         else:
             img = transforms.Resize(self.image_shape)(img)

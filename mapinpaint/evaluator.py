@@ -11,12 +11,54 @@ from model.networks import Generator
 from utils.tools import get_config
 
 
+class Evaluator:
+    def __init__(self, config, netG=None):
+        self.config = config
+        self.use_cuda = self.config['cuda']
+        self.device_ids = self.config['gpu_ids']
+        if netG is not None:
+            self.netG = netG
+        else:
+            self.netG = Generator(self.config['netG'], self.use_cuda, self.device_ids)
+        if self.use_cuda:
+            self.netG.to(self.device_ids[0])
+
+    @torch.no_grad()
+    def eval_step(self, x, mask, ground_truth, img_raw_size):
+        self.netG.eval()
+        x_out = self.netG(x, mask)
+        inpainted_result = x_out * mask + x * (1. - mask)
+
+        width, height = x.size(2), x.size(3)
+        if img_raw_size[0] < width and img_raw_size[1] < height:
+            i_left = (width - img_raw_size[0]) // 2
+            i_top = (height - img_raw_size[1]) // 2
+            i_right = i_left + img_raw_size[0]
+            i_bottom = i_top + img_raw_size[1]
+            x = x[:, :, i_left:i_right, i_top:i_bottom]
+            ground_truth = ground_truth[:, :, i_left:i_right, i_top:i_bottom]
+            inpainted_result = inpainted_result[:, :, i_left:i_right, i_top:i_bottom]
+
+        mae = F.l1_loss(inpainted_result, ground_truth).item()
+        pred_mask_flat = (inpainted_result > 0).view(-1)
+        gt_mask_flat = (ground_truth > 0).view(-1)
+        intersection = (pred_mask_flat & gt_mask_flat).sum().float()
+        union = (pred_mask_flat | gt_mask_flat).sum().float()
+        TP = intersection
+        FP = (pred_mask_flat & ~gt_mask_flat).sum().float()
+        FN = (~pred_mask_flat & gt_mask_flat).sum().float()
+        iou = (intersection / union).item()
+        f1 = (2 * TP / (2 * TP + FP + FN)).item()
+
+        metrics = {'mae': mae, 'iou': iou, 'f1': f1}
+
+        return metrics, (inpainted_result, x, ground_truth)
+
+
 def main():
-    map_size = [250, 250]
     run_path = '../checkpoints/wgan_1616_noL1'
-    checkpoint_path = f'{run_path}/gen_00400000.pt'
     config_path = f'{run_path}/config.yaml'
-    test_path = '../dataset/maps_test_inpaint'
+    checkpoint_path = os.path.join(run_path, [f for f in os.listdir(run_path) if f.startswith('gen') and f.endswith('.pt')][0])
     save_img = True
     if save_img:
         if not os.path.exists(f"{run_path}/images"):
@@ -42,60 +84,37 @@ def main():
     # Define the trainer
     netG = Generator(config['netG'], cuda, device_ids)
     netG.load_state_dict(torch.load(checkpoint_path))
-    netG.eval()
-    if cuda:
-        netG = netG.cuda()
     print("Resume from {}".format(checkpoint_path))
 
+    evaluator = Evaluator(config, netG)
+
     # Dataset
-    test_dataset = Dataset(data_path=test_path,
+    eval_dataset = Dataset(data_path=config['eval_data_path'],
                            image_shape=config['image_shape'],
                            data_aug=False)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
+    eval_loader = torch.utils.data.DataLoader(dataset=eval_dataset,
                                               batch_size=1,
                                               shuffle=False,
                                               num_workers=1)
-    iterable_test_loader = iter(test_loader)
+    iterable_eval_loader = iter(eval_loader)
 
     results = []
 
-    for n in range(len(test_loader)):
-        ground_truth, x, mask = next(iterable_test_loader)
+    for n in range(len(eval_loader)):
+        ground_truth, x, mask = next(iterable_eval_loader)
         if cuda:
             x = x.cuda()
             mask = mask.cuda()
             ground_truth = ground_truth.cuda()
-        x_out = netG(x, mask)
-        inpainted_result = x_out * mask + x * (1. - mask)
-
-        width, height = x.size(2), x.size(3)
-        if map_size[0] < width and map_size[1] < height:
-            i_left = (width - map_size[0]) // 2
-            i_top = (height - map_size[1]) // 2
-            i_right = i_left + map_size[0]
-            i_bottom = i_top + map_size[1]
-            x = x[:, :, i_left:i_right, i_top:i_bottom]
-            ground_truth = ground_truth[:, :, i_left:i_right, i_top:i_bottom]
-            inpainted_result = inpainted_result[:, :, i_left:i_right, i_top:i_bottom]
-
         explored_rate = ((x > 0.99).sum() / (ground_truth > 0.99).sum()).item()
-        mae = F.l1_loss(inpainted_result, ground_truth).item()
 
-        pred_mask_flat = (inpainted_result > 0).view(-1)
-        gt_mask_flat = (ground_truth > 0).view(-1)
-        intersection = (pred_mask_flat & gt_mask_flat).sum().float()
-        union = (pred_mask_flat | gt_mask_flat).sum().float()
-        TP = intersection
-        FP = (pred_mask_flat & ~gt_mask_flat).sum().float()
-        FN = (~pred_mask_flat & gt_mask_flat).sum().float()
-        iou = (intersection / union).item()
-        f1 = (2 * TP / (2 * TP + FP + FN)).item()
+        metrics, (inpainted_result, x, ground_truth) = evaluator.eval_step(x, mask, ground_truth, eval_dataset.image_raw_shape)
 
         results.append({
             "explored_rate": explored_rate,
-            "mae": mae,
-            "iou": iou,
-            "f1": f1
+            "mae": metrics['mae'],
+            "iou": metrics['iou'],
+            "f1": metrics['f1'],
         })
 
         if save_img:

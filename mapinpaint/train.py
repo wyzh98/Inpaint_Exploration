@@ -4,6 +4,7 @@ import time
 import shutil
 from argparse import ArgumentParser
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
@@ -12,6 +13,7 @@ from tensorboardX import SummaryWriter
 import wandb
 
 from trainer import Trainer
+from evaluator import Evaluator
 from data.dataset import Dataset
 from utils.tools import get_config
 from utils.logger import get_logger
@@ -68,11 +70,18 @@ def main():
                                                    batch_size=config['batch_size'],
                                                    shuffle=True,
                                                    num_workers=config['num_workers'])
-        # Define the trainer
+
+        eval_dataset = Dataset(data_path=config['eval_data_path'],
+                               image_shape=config['image_shape'],
+                               data_aug=False)
+        eval_loader = torch.utils.data.DataLoader(dataset=eval_dataset,
+                                                  batch_size=1,
+                                                  shuffle=False,
+                                                  num_workers=1)
+
+        # Define the trainer and evaluator
         trainer = Trainer(config)
-        # logger.info("\n{}".format(trainer.netG))
-        # logger.info("\n{}".format(trainer.localD))
-        # logger.info("\n{}".format(trainer.globalD))
+        evaluator = Evaluator(config)
 
         if cuda:
             trainer = nn.parallel.DataParallel(trainer, device_ids=device_ids)
@@ -133,6 +142,31 @@ def main():
                     trainer_module.optimizer_g.step()
                 trainer_module.optimizer_d.step()  # put at last to prevent inplace op
 
+            # evaluation and log
+            eval_metrics = {'mae': [], 'iou': [], 'f1': []}
+            if config['eval_iter'] and (iteration % config['eval_iter'] == 0):
+                iterable_eval_loader = iter(eval_loader)
+                for n in range(len(eval_loader)):
+                    ground_truth, x, mask = next(iterable_eval_loader)
+                    if cuda:
+                        x = x.cuda()
+                        mask = mask.cuda()
+                        ground_truth = ground_truth.cuda()
+                    metrics = evaluator.eval_step(x, mask, ground_truth, eval_dataset.image_raw_shape)
+                    for k in eval_metrics.keys():
+                        eval_metrics[k].append(metrics[k])
+                message = 'Eval: [%d] ' % iteration
+                wangb_eval_log = {}
+                for k, vl in eval_metrics.keys():
+                    v = np.mean(vl)
+                    message += '%s: %.6f ' % (k, v)
+                    k = 'eval/' + k
+                    wangb_eval_log[k] = v
+                    writer.add_scalar(k, v, iteration)
+                if args.wandb:
+                    wandb.log(wangb_eval_log, step=iteration)
+                logger.info(message)
+
             # Log and visualization
             log_losses = ['l1', 'ae', 'wgan_g', 'wgan_d', 'wgan_gp', 'g', 'd']
             if iteration % config['print_iter'] == 0:
@@ -145,10 +179,10 @@ def main():
                 wandb_log = {}
                 for k in log_losses:
                     v = losses.get(k, 0.)
+                    message += '%s: %.6f ' % (k, v)
                     k = 'loss/' + k
                     wandb_log[k] = v
                     writer.add_scalar(k, v, iteration)
-                    message += '%s: %.6f ' % (k, v)
                 if args.wandb:
                     wandb_log['speed'] = speed
                     wandb.log(wandb_log, step=iteration)
