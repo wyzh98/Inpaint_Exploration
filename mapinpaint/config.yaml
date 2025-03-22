@@ -19,7 +19,7 @@ beta2: 0.9
 n_critic: 3
 niter: 500000
 print_iter: 100
-viz_iter: 1000
+viz_iter: 2000
 viz_max_out: 16
 snapshot_save_iter: 20000
 
