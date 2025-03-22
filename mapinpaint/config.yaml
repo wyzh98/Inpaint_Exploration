@@ -1,12 +1,12 @@
 # data parameters
-expname: map_inpainting
+expname: wgan_1616_noL1
 train_data_path: ../dataset/maps_train_inpaint
 resume:
 batch_size: 24
 image_shape: [256, 256, 1]
 mask_shape: [256, 256]
-discounted_mask: True
-spatial_discounting_gamma: 0.9
+#discounted_mask: False
+#spatial_discounting_gamma: 0.9
 
 # training parameters
 cuda: True
@@ -18,15 +18,13 @@ beta2: 0.9
 n_critic: 3
 niter: 500000
 print_iter: 100
-viz_iter: 2000
+viz_iter: 1000
 viz_max_out: 16
 snapshot_save_iter: 20000
 
 # loss weight
-coarse_l1_alpha: 1.2
-l1_loss_alpha: 1.5
-ae_loss_alpha: 1.5
-global_wgan_loss_alpha: 0.5
+#l1_loss_alpha: 1.5
+ae_loss_alpha: 3.0
 gan_loss_alpha: 0.001
 wgan_gp_lambda: 10.0
 

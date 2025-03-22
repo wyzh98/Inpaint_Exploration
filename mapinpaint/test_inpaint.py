@@ -12,11 +12,11 @@ from utils.tools import get_config
 
 
 def main():
-    run_path = '../checkpoints/01mask_1616-10'
-    checkpoint_path = f'{run_path}/gen_00100000.pt'
+    run_path = '../checkpoints/wgan_1616_noL1'
+    checkpoint_path = f'{run_path}/gen_00400000.pt'
     config_path = f'{run_path}/config.yaml'
     test_path = '../dataset/maps_test_inpaint'
-    save_img = False
+    save_img = True
     if save_img:
         if not os.path.exists(f"{run_path}/images"):
             os.makedirs(f"{run_path}/images")
@@ -64,8 +64,8 @@ def main():
             x = x.cuda()
             mask = mask.cuda()
             ground_truth = ground_truth.cuda()
-        x1, x2, offset_flow = netG(x, mask)
-        inpainted_result = x2 * mask + x * (1. - mask)
+        x_out = netG(x, mask)
+        inpainted_result = x_out * mask + x * (1. - mask)
 
         explored_rate = ((x > 0.99).sum() / (ground_truth > 0.99).sum()).item()
         mae = F.l1_loss(inpainted_result, ground_truth).item()

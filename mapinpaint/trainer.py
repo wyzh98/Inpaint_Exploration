@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from torch import autograd
-from model.networks import Generator, LocalDis, GlobalDis
+from model.networks import Generator, Discriminator
 
 from utils.tools import get_model_list, spatial_discounting_mask
 from utils.logger import get_logger
@@ -18,61 +18,45 @@ class Trainer(nn.Module):
         self.device_ids = self.config['gpu_ids']
 
         self.netG = Generator(self.config['netG'], self.use_cuda, self.device_ids)
-        self.localD = LocalDis(self.config['netD'], self.use_cuda, self.device_ids)
-        self.globalD = GlobalDis(self.config['netD'], self.use_cuda, self.device_ids)
+        self.netD = Discriminator(self.config['netD'], self.use_cuda, self.device_ids)
 
         self.optimizer_g = torch.optim.Adam(self.netG.parameters(), lr=self.config['lr'],
                                             betas=(self.config['beta1'], self.config['beta2']))
-        d_params = list(self.localD.parameters()) + list(self.globalD.parameters())
-        self.optimizer_d = torch.optim.Adam(d_params, lr=config['lr'],
+        self.optimizer_d = torch.optim.Adam(self.netD.parameters(), lr=self.config['lr'],
                                             betas=(self.config['beta1'], self.config['beta2']))
+
         if self.use_cuda:
             self.netG.to(self.device_ids[0])
-            self.localD.to(self.device_ids[0])
-            self.globalD.to(self.device_ids[0])
+            self.netD.to(self.device_ids[0])
 
     def forward(self, x, masks, ground_truth, compute_loss_g=False):
         self.train()
         l1_loss = nn.L1Loss()
         losses = {}
 
-        x1, x2, offset_flow = self.netG(x, masks)
-        x1_inpaint = x1 * masks + x * (1. - masks)
-        x2_inpaint = x2 * masks + x * (1. - masks)
+        x_out = self.netG(x, masks)
+        x_inpaint = x_out * masks + x * (1. - masks)
 
         # D part
         # wgan d loss
-        local_patch_real_pred, local_patch_fake_pred = self.dis_forward(
-            self.localD, ground_truth, x2_inpaint.detach())
-        global_real_pred, global_fake_pred = self.dis_forward(
-            self.globalD, ground_truth, x2_inpaint.detach())
-        losses['wgan_d'] = torch.mean(local_patch_fake_pred - local_patch_real_pred) + \
-            torch.mean(global_fake_pred - global_real_pred) * self.config['global_wgan_loss_alpha']
+        real_pred, fake_pred = self.dis_forward(self.netD, ground_truth, x_inpaint.detach())
+        losses['wgan_d'] = torch.mean(fake_pred - real_pred)
+
         # gradients penalty loss
-        local_penalty = self.calc_gradient_penalty(
-            self.localD, ground_truth, x2_inpaint.detach())
-        global_penalty = self.calc_gradient_penalty(self.globalD, ground_truth, x2_inpaint.detach())
-        losses['wgan_gp'] = local_penalty + global_penalty
+        gp_loss = self.calc_gradient_penalty(self.netD, ground_truth, x_inpaint.detach())
+        losses['wgan_gp'] = gp_loss
 
         # G part
         if compute_loss_g:
-            sd_mask = spatial_discounting_mask(self.config)
-            losses['l1'] = l1_loss(x1_inpaint * sd_mask, ground_truth * sd_mask) * \
-                self.config['coarse_l1_alpha'] + \
-                l1_loss(x2_inpaint * sd_mask, ground_truth * sd_mask)
-            losses['ae'] = l1_loss(x1 * (1. - masks), ground_truth * (1. - masks)) * \
-                self.config['coarse_l1_alpha'] + \
-                l1_loss(x2 * (1. - masks), ground_truth * (1. - masks))
+            # sd_mask = spatial_discounting_mask(self.config)
+            # losses['l1'] = l1_loss(x_inpaint * sd_mask, ground_truth * sd_mask)
+            losses['ae'] = l1_loss(x_out * (1. - masks), ground_truth * (1. - masks))
 
             # wgan g loss
-            local_patch_real_pred, local_patch_fake_pred = self.dis_forward(
-                self.localD, ground_truth, x2_inpaint)
-            global_real_pred, global_fake_pred = self.dis_forward(
-                self.globalD, ground_truth, x2_inpaint)
-            losses['wgan_g'] = - torch.mean(local_patch_fake_pred) - \
-                torch.mean(global_fake_pred) * self.config['global_wgan_loss_alpha']
+            _, fake_pred_for_g = self.dis_forward(self.netD, ground_truth, x_inpaint)
+            losses['wgan_g'] = - torch.mean(fake_pred_for_g)
 
-        return losses, x2_inpaint, offset_flow
+        return losses, x_inpaint
 
     def dis_forward(self, netD, ground_truth, x_inpaint):
         assert ground_truth.size() == x_inpaint.size()
@@ -111,11 +95,9 @@ class Trainer(nn.Module):
 
     def inference(self, x, masks):
         self.eval()
-        x1, x2, offset_flow = self.netG(x, masks)
-        # x1_inpaint = x1 * masks + x * (1. - masks)
-        x2_inpaint = x2 * masks + x * (1. - masks)
-
-        return x2_inpaint, offset_flow
+        x_out = self.netG(x, masks)
+        x_inpaint = x_out * masks + x * (1. - masks)
+        return x_inpaint
 
     def save_model(self, checkpoint_dir, iteration):
         # Save generators, discriminators, and optimizers
@@ -123,8 +105,7 @@ class Trainer(nn.Module):
         dis_name = os.path.join(checkpoint_dir, 'dis_%08d.pt' % iteration)
         opt_name = os.path.join(checkpoint_dir, 'optimizer.pt')
         torch.save(self.netG.state_dict(), gen_name)
-        torch.save({'localD': self.localD.state_dict(),
-                    'globalD': self.globalD.state_dict()}, dis_name)
+        torch.save(self.netD.state_dict(), dis_name)
         torch.save({'gen': self.optimizer_g.state_dict(),
                     'dis': self.optimizer_d.state_dict()}, opt_name)
 
@@ -137,9 +118,7 @@ class Trainer(nn.Module):
         if not test:
             # Load discriminators
             last_model_name = get_model_list(checkpoint_dir, "dis", iteration=iteration)
-            state_dict = torch.load(last_model_name)
-            self.localD.load_state_dict(state_dict['localD'])
-            self.globalD.load_state_dict(state_dict['globalD'])
+            self.netD.load_state_dict(torch.load(last_model_name))
             # Load optimizers
             state_dict = torch.load(os.path.join(checkpoint_dir, 'optimizer.pt'))
             self.optimizer_d.load_state_dict(state_dict['dis'])

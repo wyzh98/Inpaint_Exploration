@@ -100,32 +100,39 @@ def main():
                 mask = mask.cuda()
                 ground_truth = ground_truth.cuda()
 
-            ###### Forward pass ######
-            compute_g_loss = iteration % config['n_critic'] == 0
-            losses, inpainted_result, offset_flow = trainer(x, mask, ground_truth, compute_g_loss)
-            # Scalars from different devices are gathered into vectors
-            for k in losses.keys():
-                if not losses[k].dim() == 0:
-                    losses[k] = torch.mean(losses[k])
-
-            ###### Backward pass ######
-            # Update D
-            trainer_module.optimizer_d.zero_grad()
-            losses['d'] = losses['wgan_d'] + losses['wgan_gp'] * config['wgan_gp_lambda']
-            losses['d'].backward()
-
-            # Update G
-            if compute_g_loss:
+            if iteration <= config['warmup_iter']:
+                # only calculate the reconstruction loss
                 trainer_module.optimizer_g.zero_grad()
-                losses['g'] = losses['l1'] * config['l1_loss_alpha'] \
-                              + losses['ae'] * config['ae_loss_alpha'] \
-                              + losses['wgan_g'] * config['gan_loss_alpha']
+                compute_g_loss = True
+                losses, inpainted_result = trainer(x, mask, ground_truth, compute_g_loss)
+                losses['g'] = losses['ae'] * config['ae_loss_alpha']
                 losses['g'].backward()
                 trainer_module.optimizer_g.step()
-            trainer_module.optimizer_d.step()
+
+            else:
+                compute_g_loss = iteration % config['n_critic'] == 0
+                losses, inpainted_result = trainer(x, mask, ground_truth, compute_g_loss)
+                # Scalars from different devices are gathered into vectors
+                for k in losses.keys():
+                    if not losses[k].dim() == 0:
+                        losses[k] = torch.mean(losses[k])
+
+                # Update D
+                trainer_module.optimizer_d.zero_grad()
+                losses['d'] = losses['wgan_d'] + losses['wgan_gp'] * config['wgan_gp_lambda']
+                losses['d'].backward()
+                trainer_module.optimizer_d.step()
+
+                # Update G
+                if compute_g_loss:
+                    trainer_module.optimizer_g.zero_grad()
+                    losses['g'] = losses['ae'] * config['ae_loss_alpha'] + \
+                                  losses['wgan_g'] * config['gan_loss_alpha']
+                    losses['g'].backward()
+                    trainer_module.optimizer_g.step()
 
             # Log and visualization
-            log_losses = ['l1', 'ae', 'wgan_g', 'wgan_d', 'wgan_gp', 'g', 'd']
+            log_losses = ['ae', 'wgan_g', 'wgan_d', 'wgan_gp', 'g', 'd']
             if iteration % config['print_iter'] == 0:
                 elapsed = time.time() - time_count
                 speed = config['print_iter'] / elapsed
