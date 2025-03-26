@@ -216,6 +216,9 @@ def spatial_discounting_mask(config, masks):
     spatial_discount_mask_tensor = torch.tensor(spatial_discount_mask, dtype=torch.float32)
     if config['cuda']:
         spatial_discount_mask_tensor = spatial_discount_mask_tensor.cuda()
+    # Normalize the mask
+    spatial_discount_mask_tensor = spatial_discount_mask_tensor * masks
+    spatial_discount_mask_tensor = 10000. * spatial_discount_mask_tensor / (torch.sum(spatial_discount_mask_tensor, dim=(2,3), keepdim=True) + 1e-8)
     return spatial_discount_mask_tensor
 
 

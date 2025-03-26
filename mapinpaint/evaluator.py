@@ -1,5 +1,7 @@
 import os
 from argparse import ArgumentParser
+import cv2
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -7,7 +9,7 @@ import torch.backends.cudnn as cudnn
 import torchvision.utils as vutils
 
 from data.dataset import Dataset
-from model.networks import Generator
+from model.networks import Generator, Discriminator
 from utils.tools import get_config
 
 
@@ -55,11 +57,28 @@ class Evaluator:
         return metrics, (inpainted_result, x, ground_truth)
 
 
+def post_process(inpaint, obs_v, free_v, kernel_size=9):
+    inpaint = torch.where(inpaint > -0.3, free_v, obs_v)
+    binary_img = inpaint.cpu().numpy()[0, 0]
+    obs_v = obs_v.item()
+    free_v = free_v.item()
+
+    mask = np.zeros_like(binary_img, dtype=np.uint8)
+    mask[binary_img == free_v] = 255
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    opening = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)  # close op to fill small holes
+    opening = cv2.morphologyEx(opening, cv2.MORPH_OPEN, kernel)  # open op to remove small noise
+    morph_clean_img = np.where(opening == 255, free_v, obs_v).astype(binary_img.dtype)
+
+    return morph_clean_img
+
+
 def main():
-    run_path = '../checkpoints/wgan_1616_noL1'
+    run_path = '../checkpoints/wgan_sdnorm0.95'
     config_path = f'{run_path}/config.yaml'
     checkpoint_path = os.path.join(run_path, [f for f in os.listdir(run_path) if f.startswith('gen') and f.endswith('.pt')][0])
     save_img = True
+    logD = True
     if save_img:
         if not os.path.exists(f"{run_path}/images"):
             os.makedirs(f"{run_path}/images")
@@ -86,6 +105,12 @@ def main():
     netG.load_state_dict(torch.load(checkpoint_path))
     print("Resume from {}".format(checkpoint_path))
 
+    if logD:
+        netD = Discriminator({'input_dim':1, 'ndf':32}, cuda, device_ids)
+        netD.load_state_dict(torch.load('../checkpoints/wgan_sdnorm0.95_3232/dis_00340000.pt'))
+        if cuda:
+            netD.to(device_ids[0])
+
     evaluator = Evaluator(config, netG)
 
     # Dataset
@@ -109,16 +134,27 @@ def main():
         explored_rate = ((x > 0.99).sum() / (ground_truth > 0.99).sum()).item()
 
         metrics, (inpainted_result, x, ground_truth) = evaluator.eval_step(x, mask, ground_truth, eval_dataset.image_raw_shape)
+        obs_v, free_v = torch.unique(ground_truth)
 
-        results.append({
-            "explored_rate": explored_rate,
-            "mae": metrics['mae'],
-            "iou": metrics['iou'],
-            "f1": metrics['f1'],
-        })
+        inpaint_processed = post_process(inpainted_result, obs_v, free_v)
+        inpaint_processed = torch.from_numpy(inpaint_processed).unsqueeze(0).unsqueeze(0).float().to(x.device)
+
+        log_metrics = {"explored_rate": explored_rate,
+                       "mae": metrics['mae'],
+                       "iou": metrics['iou'],
+                       "f1": metrics['f1']}
+
+        if logD:
+            inpaint_score = netD(inpainted_result)
+            gt_score = netD(ground_truth)
+            score_diff = inpaint_score - gt_score
+            log_metrics.update({"inpaint_score": inpaint_score.item(),
+                                "dis_score": score_diff.item()})
+
+        results.append(log_metrics)
 
         if save_img:
-            viz_images = torch.stack([x, inpainted_result, ground_truth], dim=1)
+            viz_images = torch.stack([x, inpainted_result, inpaint_processed, ground_truth], dim=1)
             viz_images = viz_images.view(-1, *list(x.size())[1:])
             vutils.save_image(viz_images,
                               f"{run_path}/images/{n:03d}.png",

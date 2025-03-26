@@ -90,7 +90,7 @@ def main():
             trainer_module = trainer
 
         # Get the resume iteration to restart training
-        start_iteration = trainer_module.resume(config['resume']) if config['resume'] else 1
+        start_iteration = trainer_module.resume(checkpoint_path, config['resume']) if config['resume'] else 1
 
         iterable_train_loader = iter(train_loader)
 
