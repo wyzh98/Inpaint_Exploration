@@ -29,12 +29,12 @@ class Trainer(nn.Module):
             self.netG.to(self.device_ids[0])
             self.netD.to(self.device_ids[0])
 
-    def forward(self, x, masks, ground_truth, compute_loss_g=False):
+    def forward(self, x, masks, ground_truth, map_onehot, compute_loss_g=False):
         self.train()
         l1_loss = nn.L1Loss()
         losses = {}
 
-        x_out = self.netG(x, masks)
+        x_out = self.netG(x, masks, map_onehot)
         x_inpaint = x_out * masks + x * (1. - masks)
 
         # D part

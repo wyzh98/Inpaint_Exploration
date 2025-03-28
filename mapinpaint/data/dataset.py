@@ -1,6 +1,8 @@
 import sys
 import random
 import numpy as np
+import torch
+import torch.nn.functional as F
 import torch.utils.data as data
 from os import listdir
 from PIL import Image
@@ -44,9 +46,9 @@ class Dataset(data.Dataset):
         else:
             raise ValueError
 
+        img_raw = img.copy()
         img = self.rotate_img(img, rotation)
 
-        self.image_raw_shape = img.size
         if self.image_raw_shape[0] < self.image_shape[0] and self.image_raw_shape[1] < self.image_shape[1]:
             pad_left = (self.image_shape[0] - self.image_raw_shape[0]) // 2
             pad_top = (self.image_shape[1] - self.image_raw_shape[1]) // 2
@@ -57,17 +59,29 @@ class Dataset(data.Dataset):
             img = transforms.Resize(self.image_shape)(img)
         # img = transforms.RandomCrop(self.image_shape)(img)
         img = transforms.ToTensor()(img)  # turn the image to a tensor
+        img_raw = transforms.ToTensor()(img_raw)
         if img_type != 'mask':
             img = normalize(img)
-        return img
+            img_raw = normalize(img_raw)
+        return img, img_raw
 
     def __getitem__(self, index):
-        data_aug = random.choice([0, 90, 180, 270]) if self.data_aug else 0
-        partial_img = self.crop_img(os.path.join(f"{self.data_path}/part", self.partial_map[index]), img_type='belief', rotation=data_aug)
-        mask_img = self.crop_img(os.path.join(f"{self.data_path}/part", self.partial_map[index]), img_type='mask', rotation=data_aug)
         map_name = '_'.join(self.partial_map[index].split('_')[:-1])
-        ground_truth = self.crop_img(os.path.join(f"{self.data_path}/full", f"{map_name}.png"), img_type='gt', rotation=data_aug)
-        return ground_truth, partial_img, mask_img
+        data_aug = random.choice([0, 90, 180, 270]) if self.data_aug else 0
+
+        partial_img, partial_img_raw = self.crop_img(os.path.join(f"{self.data_path}/part", self.partial_map[index]), img_type='belief', rotation=data_aug)
+        mask_img, mask_img_raw = self.crop_img(os.path.join(f"{self.data_path}/part", self.partial_map[index]), img_type='mask', rotation=data_aug)
+        ground_truth, ground_truth_raw = self.crop_img(os.path.join(f"{self.data_path}/full", f"{map_name}.png"), img_type='gt', rotation=data_aug)
+
+        if 'room' in map_name:
+            index = torch.tensor(0)
+        elif 'tunnel' in map_name:
+            index = torch.tensor(1)
+        else:
+            raise ValueError(f"Unknown map name: {map_name}")
+        map_onehot = F.one_hot(index, num_classes=2).float()
+
+        return ground_truth, partial_img, mask_img, map_onehot, (ground_truth_raw, partial_img_raw, mask_img_raw)
 
     def __len__(self):
         return len(self.partial_map)

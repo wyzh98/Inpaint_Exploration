@@ -2,8 +2,10 @@ import os
 from argparse import ArgumentParser
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import torchvision.utils as vutils
@@ -14,10 +16,11 @@ from utils.tools import get_config
 
 
 class Evaluator:
-    def __init__(self, config, netG=None):
+    def __init__(self, config, netG=None, nsample=0):
         self.config = config
         self.use_cuda = self.config['cuda']
         self.device_ids = self.config['gpu_ids']
+        self.nsample = nsample
         if netG is not None:
             self.netG = netG
         else:
@@ -26,9 +29,9 @@ class Evaluator:
             self.netG.to(self.device_ids[0])
 
     @torch.no_grad()
-    def eval_step(self, x, mask, ground_truth, img_raw_size):
+    def eval_step(self, x, mask, ground_truth, onehot, img_raw_size):
         self.netG.eval()
-        x_out = self.netG(x, mask)
+        x_out = self.netG(x, mask, onehot)
         inpainted_result = x_out * mask + x * (1. - mask)
 
         width, height = x.size(2), x.size(3)
@@ -40,6 +43,11 @@ class Evaluator:
             x = x[:, :, i_left:i_right, i_top:i_bottom]
             ground_truth = ground_truth[:, :, i_left:i_right, i_top:i_bottom]
             inpainted_result = inpainted_result[:, :, i_left:i_right, i_top:i_bottom]
+        else:
+            # reshape
+            x = F.interpolate(x, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
+            ground_truth = F.interpolate(ground_truth, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
+            inpainted_result = F.interpolate(inpainted_result, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
 
         mae = F.l1_loss(inpainted_result, ground_truth).item()
         pred_mask_flat = (inpainted_result > 0).view(-1)
@@ -54,11 +62,16 @@ class Evaluator:
 
         metrics = {'mae': mae, 'iou': iou, 'f1': f1}
 
-        return metrics, (inpainted_result, x, ground_truth)
+        return metrics, inpainted_result
 
 
-def post_process(inpaint, obs_v, free_v, kernel_size=9):
-    inpaint = torch.where(inpaint > -0.3, free_v, obs_v)
+def post_process(inpaint, x, kernel_size=5):
+    unique_values, counts = torch.unique(x, return_counts=True)
+    top3_indices = torch.topk(counts, k=3).indices
+    top3_values = unique_values[top3_indices]
+    obs_v, free_v = top3_values.min(), top3_values.max()
+
+    inpaint = torch.where(inpaint > -0.3, free_v, obs_v)  # binarization
     binary_img = inpaint.cpu().numpy()[0, 0]
     obs_v = obs_v.item()
     free_v = free_v.item()
@@ -69,19 +82,20 @@ def post_process(inpaint, obs_v, free_v, kernel_size=9):
     opening = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)  # close op to fill small holes
     opening = cv2.morphologyEx(opening, cv2.MORPH_OPEN, kernel)  # open op to remove small noise
     morph_clean_img = np.where(opening == 255, free_v, obs_v).astype(binary_img.dtype)
-
+    x_array = x.cpu().numpy()[0, 0]
+    morph_clean_img = np.where((x_array == obs_v) | (x_array == free_v), x_array, morph_clean_img)
     return morph_clean_img
 
 
 def main():
-    run_path = '../checkpoints/wgan_sdnorm0.95'
+    run_path = '../checkpoints/wgan_onehot'
     config_path = f'{run_path}/config.yaml'
     checkpoint_path = os.path.join(run_path, [f for f in os.listdir(run_path) if f.startswith('gen') and f.endswith('.pt')][0])
     save_img = True
-    logD = True
+    save_csv = True
+    nsample = 5  # set 1, >=2 to set the number of samples
     if save_img:
-        if not os.path.exists(f"{run_path}/images"):
-            os.makedirs(f"{run_path}/images")
+        os.makedirs(f"{run_path}/images", exist_ok=True)
     parser = ArgumentParser()
     parser.add_argument('--config', type=str, default=config_path, help="testing configuration")
     parser.add_argument('--seed', type=int, default=0, help='manual seed')
@@ -105,15 +119,10 @@ def main():
     netG.load_state_dict(torch.load(checkpoint_path))
     print("Resume from {}".format(checkpoint_path))
 
-    if logD:
-        netD = Discriminator({'input_dim':1, 'ndf':32}, cuda, device_ids)
-        netD.load_state_dict(torch.load('../checkpoints/wgan_sdnorm0.95_3232/dis_00340000.pt'))
-        if cuda:
-            netD.to(device_ids[0])
-
-    evaluator = Evaluator(config, netG)
+    evaluator = Evaluator(config, netG, nsample)
 
     # Dataset
+    # config['eval_data_path'] = '../dataset/kth_test_maps/50052748'
     eval_dataset = Dataset(data_path=config['eval_data_path'],
                            image_shape=config['image_shape'],
                            data_aug=False)
@@ -126,43 +135,55 @@ def main():
     results = []
 
     for n in range(len(eval_loader)):
-        ground_truth, x, mask = next(iterable_eval_loader)
+        ground_truth, x, mask, _, (ground_truth_raw, x_raw, mask_raw) = next(iterable_eval_loader)
         if cuda:
             x = x.cuda()
             mask = mask.cuda()
             ground_truth = ground_truth.cuda()
+            x_raw = x_raw.cuda()
+            ground_truth_raw = ground_truth_raw.cuda()
         explored_rate = ((x > 0.99).sum() / (ground_truth > 0.99).sum()).item()
 
-        metrics, (inpainted_result, x, ground_truth) = evaluator.eval_step(x, mask, ground_truth, eval_dataset.image_raw_shape)
-        obs_v, free_v = torch.unique(ground_truth)
+        all_inpaints = []
+        all_inpaints_processed = []
+        onehots = torch.tensor([[1,0],[0,1],[0.5,0.5],[0,0],[1,1]]).unsqueeze(1).float().to(x.device)
 
-        inpaint_processed = post_process(inpainted_result, obs_v, free_v)
-        inpaint_processed = torch.from_numpy(inpaint_processed).unsqueeze(0).unsqueeze(0).float().to(x.device)
+        for i in range(nsample):
+            metrics, inpainted_result = evaluator.eval_step(x, mask, ground_truth, onehots[i], eval_dataset.image_raw_shape)
 
-        log_metrics = {"explored_rate": explored_rate,
-                       "mae": metrics['mae'],
-                       "iou": metrics['iou'],
-                       "f1": metrics['f1']}
+            inpaint_processed = post_process(inpainted_result, x_raw)
+            inpaint_processed = torch.from_numpy(inpaint_processed).unsqueeze(0).unsqueeze(0).float().to(x.device)
+            all_inpaints.append(inpainted_result)
+            all_inpaints_processed.append(inpaint_processed)
 
-        if logD:
-            inpaint_score = netD(inpainted_result)
-            gt_score = netD(ground_truth)
-            score_diff = inpaint_score - gt_score
-            log_metrics.update({"inpaint_score": inpaint_score.item(),
-                                "dis_score": score_diff.item()})
+            log_metrics = {"explored_rate": explored_rate,
+                           "mae": metrics['mae'],
+                           "iou": metrics['iou'],
+                           "f1": metrics['f1']}
 
-        results.append(log_metrics)
+            results.append(log_metrics)
 
         if save_img:
-            viz_images = torch.stack([x, inpainted_result, inpaint_processed, ground_truth], dim=1)
-            viz_images = viz_images.view(-1, *list(x.size())[1:])
+            avg_inpainted_result = torch.stack(all_inpaints, dim=0).mean(dim=0)
+            avg_inpainted_processed = torch.stack(all_inpaints_processed, dim=0).mean(dim=0)
+            viz_images = torch.stack([x_raw, avg_inpainted_result, avg_inpainted_processed, ground_truth_raw], dim=1)
+            viz_images = viz_images.view(-1, *list(x_raw.size())[1:])
             vutils.save_image(viz_images,
                               f"{run_path}/images/{n:03d}.png",
                               normalize=True)
+            if nsample > 1:
+                all_inpaints = torch.cat(all_inpaints, dim=0)
+                vutils.save_image(all_inpaints,
+                                  f"{run_path}/images/{n:03d}_sample.png",
+                                  normalize=True)
 
-    df = pd.DataFrame(results)
-    df = df.sort_values(by="explored_rate", ascending=True)
-    df.to_csv(f"{run_path}/traj_metrics.csv", index=False)
+    if save_csv:
+        df = pd.DataFrame(results)
+        df = df.sort_values(by="explored_rate", ascending=True)
+        df.to_csv(f"{run_path}/traj_metrics.csv", index=False)
+    print(f"Mean mae: {np.mean([y['mae'] for y in results]):.4f}")
+    print(f"Mean iou: {np.mean([y['iou'] for y in results]):.4f}")
+    print(f"Mean f1: {np.mean([y['f1'] for y in results]):.4f}")
 
 
 if __name__ == '__main__':

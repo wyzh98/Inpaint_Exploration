@@ -15,8 +15,8 @@ class Generator(nn.Module):
 
         self.generator = ImageGenerator(self.input_dim, self.cnum, self.use_cuda, self.device_ids)
 
-    def forward(self, x, mask):
-        x_out = self.generator(x, mask)
+    def forward(self, x, mask, onehot):
+        x_out = self.generator(x, mask, onehot)
         return x_out
 
 
@@ -26,7 +26,7 @@ class ImageGenerator(nn.Module):
         self.use_cuda = use_cuda
         self.device_ids = device_ids
 
-        self.conv1 = gen_conv(input_dim + 2, cnum, 5, 1, 2)
+        self.conv1 = gen_conv(input_dim + 3, cnum, 5, 1, 2)
         self.conv2_downsample = gen_conv(cnum, cnum*2, 3, 2, 1)
         self.conv3 = gen_conv(cnum*2, cnum*2, 3, 1, 1)
         self.conv4_downsample = gen_conv(cnum*2, cnum*4, 3, 2, 1)
@@ -47,14 +47,12 @@ class ImageGenerator(nn.Module):
         self.conv16 = gen_conv(cnum, cnum//2, 3, 1, 1)
         self.conv17 = gen_conv(cnum//2, input_dim, 3, 1, 1, activation='none')
 
-    def forward(self, x, mask):
-        # For indicating the boundaries of images
-        ones = torch.ones(x.size(0), 1, x.size(2), x.size(3))
+    def forward(self, x, mask, onehot):
+        onehot_expanded = onehot.view(onehot.size(0), onehot.size(1), 1, 1).expand(-1, -1, x.size(2), x.size(3))
         if self.use_cuda:
-            ones = ones.cuda()
             mask = mask.cuda()
         # 5 x 256 x 256
-        x = self.conv1(torch.cat([x, ones, mask], dim=1))
+        x = self.conv1(torch.cat([x, onehot_expanded, mask], dim=1))
         x = self.conv2_downsample(x)
         # cnum*2 x 128 x 128
         x = self.conv3(x)

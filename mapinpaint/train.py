@@ -98,22 +98,23 @@ def main():
 
         for iteration in range(start_iteration, config['niter'] + 1):
             try:
-                ground_truth, x, mask = next(iterable_train_loader)
+                ground_truth, x, mask, map_onehot, _ = next(iterable_train_loader)
             except StopIteration:
                 iterable_train_loader = iter(train_loader)
-                ground_truth, x, mask = next(iterable_train_loader)
+                ground_truth, x, mask, map_onehot, _ = next(iterable_train_loader)
 
             # Prepare the inputs
             if cuda:
                 x = x.cuda()
                 mask = mask.cuda()
                 ground_truth = ground_truth.cuda()
+                map_onehot = map_onehot.cuda()
 
             if iteration <= config['warmup_iter']:
                 # only calculate the reconstruction loss
                 trainer_module.optimizer_g.zero_grad()
                 compute_g_loss = True
-                losses, inpainted_result = trainer(x, mask, ground_truth, compute_g_loss)
+                losses, inpainted_result = trainer(x, mask, ground_truth, map_onehot, compute_g_loss)
                 losses['g'] = losses['ae'] * config['ae_loss_alpha'] + \
                               losses['l1'] * config['l1_loss_alpha']
                 losses['g'].backward()
@@ -121,7 +122,7 @@ def main():
 
             else:
                 compute_g_loss = iteration % config['n_critic'] == 0
-                losses, inpainted_result = trainer(x, mask, ground_truth, compute_g_loss)
+                losses, inpainted_result = trainer(x, mask, ground_truth, map_onehot, compute_g_loss)
                 # Scalars from different devices are gathered into vectors
                 for k in losses.keys():
                     if not losses[k].dim() == 0:
@@ -147,12 +148,13 @@ def main():
             if config['eval_iter'] and (iteration % config['eval_iter'] == 0):
                 iterable_eval_loader = iter(eval_loader)
                 for n in range(len(eval_loader)):
-                    gt_e, x_e, mask_e = next(iterable_eval_loader)
+                    gt_e, x_e, mask_e, map_onehot_e, _ = next(iterable_eval_loader)
                     if cuda:
                         x_e = x_e.cuda()
                         mask_e = mask_e.cuda()
                         gt_e = gt_e.cuda()
-                    metrics, _ = evaluator.eval_step(x_e, mask_e, gt_e, eval_dataset.image_raw_shape)
+                        map_onehot_e = map_onehot_e.cuda()
+                    metrics, _ = evaluator.eval_step(x_e, mask_e, gt_e, map_onehot_e, eval_dataset.image_raw_shape)
                     for k, vl in eval_metrics.items():
                         vl.append(metrics[k])
                 message = 'Eval: [%d] ' % iteration
