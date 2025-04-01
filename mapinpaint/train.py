@@ -116,7 +116,9 @@ def main():
                 compute_g_loss = True
                 losses, inpainted_result = trainer(x, mask, ground_truth, map_onehot, compute_g_loss)
                 losses['g'] = losses['ae'] * config['ae_loss_alpha'] + \
-                              losses['l1'] * config['l1_loss_alpha']
+                              losses['l1'] * config['l1_loss_alpha'] + \
+                              losses['f1'] * config['f1_loss_alpha'] + \
+                              losses['kl'] * config['kl_loss_alpha']
                 losses['g'].backward()
                 trainer_module.optimizer_g.step()
 
@@ -138,6 +140,8 @@ def main():
                     trainer_module.optimizer_g.zero_grad()
                     losses['g'] = losses['ae'] * config['ae_loss_alpha'] + \
                                   losses['l1'] * config['l1_loss_alpha'] + \
+                                  losses['f1'] * config['f1_loss_alpha'] + \
+                                  losses['kl'] * config['kl_loss_alpha'] + \
                                   losses['wgan_g'] * config['gan_loss_alpha']
                     losses['g'].backward()
                     trainer_module.optimizer_g.step()
@@ -170,7 +174,7 @@ def main():
                 logger.info(message)
 
             # Log and visualization
-            log_losses = ['l1', 'ae', 'wgan_g', 'wgan_d', 'wgan_gp', 'g', 'd']
+            log_losses = ['l1', 'ae', 'f1', 'kl', 'wgan_g', 'wgan_d', 'wgan_gp', 'g', 'd']
             if iteration % config['print_iter'] == 0:
                 elapsed = time.time() - time_count
                 speed = config['print_iter'] / elapsed

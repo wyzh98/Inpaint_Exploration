@@ -27,25 +27,27 @@ class ImageGenerator(nn.Module):
         self.device_ids = device_ids
 
         self.conv1 = gen_conv(input_dim + 3, cnum, 5, 1, 2)
-        self.conv2_downsample = gen_conv(cnum, cnum*2, 3, 2, 1)
-        self.conv3 = gen_conv(cnum*2, cnum*2, 3, 1, 1)
-        self.conv4_downsample = gen_conv(cnum*2, cnum*4, 3, 2, 1)
-        self.conv5 = gen_conv(cnum*4, cnum*4, 3, 1, 1)
-        self.conv6 = gen_conv(cnum*4, cnum*4, 3, 1, 1)
+        self.conv2_downsample = gen_conv(cnum, cnum * 2, 3, 2, 1)
+        self.conv3 = gen_conv(cnum * 2, cnum * 2, 3, 1, 1)
+        self.conv4_downsample = gen_conv(cnum * 2, cnum * 4, 3, 2, 1)
+        self.conv5 = gen_conv(cnum * 4, cnum * 4, 3, 1, 1)
+        self.conv6 = gen_conv(cnum * 4, cnum * 4, 3, 1, 1)
 
-        self.conv7_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 2, rate=2)
-        self.conv8_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 4, rate=4)
-        self.conv9_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 8, rate=8)
-        self.conv10_atrous = gen_conv(cnum*4, cnum*4, 3, 1, 16, rate=16)
+        self.conv7_atrous = gen_conv(cnum * 4, cnum * 4, 3, 1, 2, rate=2)
+        self.conv8_atrous = gen_conv(cnum * 4, cnum * 4, 3, 1, 4, rate=4)
+        self.conv9_atrous = gen_conv(cnum * 4, cnum * 4, 3, 1, 8, rate=8)
+        self.conv10_atrous = gen_conv(cnum * 4, cnum * 4, 3, 1, 16, rate=16)
 
-        self.conv11 = gen_conv(cnum*4, cnum*4, 3, 1, 1)
-        self.conv12 = gen_conv(cnum*4, cnum*4, 3, 1, 1)
+        self.conv11 = gen_conv(cnum * 4, cnum * 4, 3, 1, 1)
+        self.conv12 = gen_conv(cnum * 4, cnum * 4, 3, 1, 1)
+        self.conv_mu = nn.Conv2d(cnum * 4, cnum * 4, kernel_size=3, stride=1, padding=1)
+        self.conv_logvar = nn.Conv2d(cnum * 4, cnum * 4, kernel_size=3, stride=1, padding=1)
 
-        self.conv13 = gen_conv(cnum*4, cnum*2, 3, 1, 1)
-        self.conv14 = gen_conv(cnum*2, cnum*2, 3, 1, 1)
-        self.conv15 = gen_conv(cnum*2, cnum, 3, 1, 1)
-        self.conv16 = gen_conv(cnum, cnum//2, 3, 1, 1)
-        self.conv17 = gen_conv(cnum//2, input_dim, 3, 1, 1, activation='none')
+        self.conv13 = gen_conv(cnum * 4, cnum * 2, 3, 1, 1)
+        self.conv14 = gen_conv(cnum * 2, cnum * 2, 3, 1, 1)
+        self.conv15 = gen_conv(cnum * 2, cnum, 3, 1, 1)
+        self.conv16 = gen_conv(cnum, cnum // 2, 3, 1, 1)
+        self.conv17 = gen_conv(cnum // 2, input_dim, 3, 1, 1, activation='none')
 
     def forward(self, x, mask, onehot):
         onehot_expanded = onehot.view(onehot.size(0), onehot.size(1), 1, 1).expand(-1, -1, x.size(2), x.size(3))
@@ -66,6 +68,13 @@ class ImageGenerator(nn.Module):
         x = self.conv10_atrous(x)
         x = self.conv11(x)
         x = self.conv12(x)
+
+        mu = self.conv_mu(x)
+        logvar = self.conv_logvar(x)
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        x = mu + eps * std
+
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         # cnum*2 x 128 x 128
         x = self.conv13(x)
@@ -77,7 +86,7 @@ class ImageGenerator(nn.Module):
         x = self.conv17(x)
         # 3 x 256 x 256
         x = torch.clamp(x, -1., 1.)
-        return x
+        return x, mu, logvar
 
 
 class Discriminator(nn.Module):
@@ -89,7 +98,7 @@ class Discriminator(nn.Module):
         self.device_ids = device_ids
 
         self.dis_conv_module = DisConvModule(self.input_dim, self.cnum)
-        self.linear = nn.Linear(self.cnum*4*16*16, 1)
+        self.linear = nn.Linear(self.cnum * 4 * 16 * 16, 1)
 
     def forward(self, x):
         x = self.dis_conv_module(x)
@@ -106,9 +115,9 @@ class DisConvModule(nn.Module):
         self.device_ids = device_ids
 
         self.conv1 = dis_conv(input_dim, cnum, 5, 2, 2)
-        self.conv2 = dis_conv(cnum, cnum*2, 5, 2, 2)
-        self.conv3 = dis_conv(cnum*2, cnum*4, 5, 2, 2)
-        self.conv4 = dis_conv(cnum*4, cnum*4, 5, 2, 2)
+        self.conv2 = dis_conv(cnum, cnum * 2, 5, 2, 2)
+        self.conv3 = dis_conv(cnum * 2, cnum * 4, 5, 2, 2)
+        self.conv4 = dis_conv(cnum * 4, cnum * 4, 5, 2, 2)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -215,7 +224,6 @@ class Conv2dBlock(nn.Module):
         if self.activation:
             x = self.activation(x)
         return x
-
 
 
 if __name__ == "__main__":

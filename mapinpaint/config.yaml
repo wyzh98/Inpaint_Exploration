@@ -25,10 +25,12 @@ viz_max_out: 16
 snapshot_save_iter: 20000
 
 # loss weight
-l1_loss_alpha: 1.0
-ae_loss_alpha: 2.0
-gan_loss_alpha: 0.001
-wgan_gp_lambda: 10.0
+l1_loss_alpha: 0.5
+ae_loss_alpha: 20.0
+f1_loss_alpha: 0.2
+kl_loss_alpha: 0.5
+gan_loss_alpha: 0.0001
+wgan_gp_lambda: 20.0
 
 # network parameters
 netG:
