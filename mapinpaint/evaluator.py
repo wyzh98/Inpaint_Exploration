@@ -5,13 +5,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import torchvision.utils as vutils
 
 from data.dataset import Dataset
-from model.networks import Generator, Discriminator
+from model.networks import Generator
 from utils.tools import get_config
 
 
@@ -49,20 +48,24 @@ class Evaluator:
             ground_truth = F.interpolate(ground_truth, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
             inpainted_result = F.interpolate(inpainted_result, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
 
-        mae = F.l1_loss(inpainted_result, ground_truth).item()
-        pred_mask_flat = (inpainted_result > 0).view(-1)
-        gt_mask_flat = (ground_truth > 0).view(-1)
-        intersection = (pred_mask_flat & gt_mask_flat).sum().float()
-        union = (pred_mask_flat | gt_mask_flat).sum().float()
-        TP = intersection
-        FP = (pred_mask_flat & ~gt_mask_flat).sum().float()
-        FN = (~pred_mask_flat & gt_mask_flat).sum().float()
-        iou = (intersection / union).item()
-        f1 = (2 * TP / (2 * TP + FP + FN)).item()
-
+        mae, iou, f1 = calc_similarity(inpainted_result, ground_truth)
         metrics = {'mae': mae, 'iou': iou, 'f1': f1}
 
         return metrics, inpainted_result
+
+
+def calc_similarity(img1, img2):
+    mae = F.l1_loss(img1, img2).item()
+    img1_flat = (img1 > 0).view(-1)
+    img2_flat = (img2 > 0).view(-1)
+    intersection = (img1_flat & img2_flat).sum().float()
+    union = (img1_flat | img2_flat).sum().float()
+    TP = intersection
+    FP = (img1_flat & ~img2_flat).sum().float()
+    FN = (~img1_flat & img2_flat).sum().float()
+    iou = (intersection / union).item()
+    f1 = (2 * TP / (2 * TP + FP + FN)).item()
+    return mae, iou, f1
 
 
 def post_process(inpaint, x, kernel_size=5):
@@ -88,12 +91,12 @@ def post_process(inpaint, x, kernel_size=5):
 
 
 def main():
-    run_path = '../checkpoints/wgan_'
+    run_path = '../checkpoints/wgan_vae_3000'
     config_path = f'{run_path}/config.yaml'
     checkpoint_path = os.path.join(run_path, [f for f in os.listdir(run_path) if f.startswith('gen') and f.endswith('.pt')][0])
     save_img = True
     save_csv = True
-    nsample = 5  # set 1, >=2 to set the number of samples
+    nsample = 4  # set 1, >=2 to set the number of samples
     if save_img:
         os.makedirs(f"{run_path}/images", exist_ok=True)
     parser = ArgumentParser()
@@ -133,6 +136,7 @@ def main():
     iterable_eval_loader = iter(eval_loader)
 
     results = []
+    similarities = []
 
     for n in range(len(eval_loader)):
         ground_truth, x, mask, _, (ground_truth_raw, x_raw, mask_raw) = next(iterable_eval_loader)
@@ -146,7 +150,8 @@ def main():
 
         all_inpaints = []
         all_inpaints_processed = []
-        onehots = torch.tensor([[0.333,0.333,0.333],[1,0,0],[0,1,0],[0,0,1],[0,0,0]]).unsqueeze(1).float().to(x.device)
+        onehots = torch.tensor([[0.333,0.333,0.333],[1,0,0],[0,1,0],[0,0,1],
+                                [0.6,0.2,0.2],[0.2,0.6,0.2],[0.2,0.2,0.6]]).unsqueeze(1).float().to(x.device)
 
         for i in range(nsample):
             metrics, inpainted_result = evaluator.eval_step(x, mask, ground_truth, onehots[i], eval_dataset.image_raw_shape)
@@ -162,6 +167,11 @@ def main():
                            "f1": metrics['f1']}
 
             results.append(log_metrics)
+
+        for i in range(nsample):
+            for j in range(i + 1, nsample):
+                f1 = calc_similarity(all_inpaints[i], all_inpaints[j])[2]
+                similarities.append(f1)
 
         if save_img:
             avg_inpainted_result = torch.stack(all_inpaints, dim=0).mean(dim=0)
@@ -185,6 +195,7 @@ def main():
     print(f"Mean mae: {np.mean([y['mae'] for y in results]):.4f}")
     print(f"Mean iou: {np.mean([y['iou'] for y in results]):.4f}")
     print(f"Mean f1: {np.mean([y['f1'] for y in results]):.4f}")
+    print(f"Mean similarity between prediction: {np.mean(similarities):.4f}")
 
 
 if __name__ == '__main__':
