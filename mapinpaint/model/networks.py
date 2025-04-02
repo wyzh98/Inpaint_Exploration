@@ -40,8 +40,6 @@ class ImageGenerator(nn.Module):
 
         self.conv11 = gen_conv(cnum * 4, cnum * 4, 3, 1, 1)
         self.conv12 = gen_conv(cnum * 4, cnum * 4, 3, 1, 1)
-        self.conv_mu = nn.Conv2d(cnum * 4, cnum * 4, kernel_size=3, stride=1, padding=1)
-        self.conv_logvar = nn.Conv2d(cnum * 4, cnum * 4, kernel_size=3, stride=1, padding=1)
 
         self.conv13 = gen_conv(cnum * 4, cnum * 2, 3, 1, 1)
         self.conv14 = gen_conv(cnum * 2, cnum * 2, 3, 1, 1)
@@ -68,13 +66,6 @@ class ImageGenerator(nn.Module):
         x = self.conv10_atrous(x)
         x = self.conv11(x)
         x = self.conv12(x)
-
-        mu = self.conv_mu(x)
-        logvar = self.conv_logvar(x)
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        x = mu + eps * std
-
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         # cnum*2 x 128 x 128
         x = self.conv13(x)
@@ -86,7 +77,7 @@ class ImageGenerator(nn.Module):
         x = self.conv17(x)
         # 3 x 256 x 256
         x = torch.clamp(x, -1., 1.)
-        return x, mu, logvar
+        return x
 
 
 class Discriminator(nn.Module):

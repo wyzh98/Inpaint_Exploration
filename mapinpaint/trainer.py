@@ -34,7 +34,7 @@ class Trainer(nn.Module):
         l1_loss = nn.L1Loss()
         losses = {}
 
-        x_out, mu, logvar = self.netG(x, masks, map_onehot)
+        x_out = self.netG(x, masks, map_onehot)
         x_inpaint = x_out * masks + x * (1. - masks)
 
         # D part
@@ -57,7 +57,6 @@ class Trainer(nn.Module):
             losses['l1'] = l1_loss(x_inpaint * sd_mask, ground_truth * sd_mask)
             losses['ae'] = l1_loss(x_out * (1. - masks), ground_truth * (1. - masks))
             losses['f1'] = 1 - f1_score.mean()
-            losses['kl'] = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
             # wgan g loss
             _, fake_pred_for_g = self.dis_forward(self.netD, ground_truth, x_inpaint)

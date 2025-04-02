@@ -30,7 +30,7 @@ class Evaluator:
     @torch.no_grad()
     def eval_step(self, x, mask, ground_truth, onehot, img_raw_size):
         self.netG.eval()
-        x_out, _, _ = self.netG(x, mask, onehot)
+        x_out = self.netG(x, mask, onehot)
         inpainted_result = x_out * mask + x * (1. - mask)
 
         width, height = x.size(2), x.size(3)
@@ -91,7 +91,7 @@ def post_process(inpaint, x, kernel_size=5):
 
 
 def main():
-    run_path = '../checkpoints/wgan_vae_3000'
+    run_path = '../checkpoints/wgan_3000'
     config_path = f'{run_path}/config.yaml'
     checkpoint_path = os.path.join(run_path, [f for f in os.listdir(run_path) if f.startswith('gen') and f.endswith('.pt')][0])
     save_img = True

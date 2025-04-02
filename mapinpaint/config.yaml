@@ -1,5 +1,5 @@
 # data parameters
-expname: map_inpainting
+expname: wgan
 train_data_path: ../dataset/maps_train_inpaint
 eval_iter: 2000  # set to 0 to disable
 eval_data_path: ../dataset/maps_eval_inpaint
