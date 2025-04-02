@@ -146,7 +146,7 @@ def main():
 
         all_inpaints = []
         all_inpaints_processed = []
-        onehots = torch.tensor([[1,0],[0,1],[0.5,0.5],[0,0],[1,1]]).unsqueeze(1).float().to(x.device)
+        onehots = torch.tensor([[0.333,0.333,0.333],[1,0,0],[0,1,0],[0,0,1],[0,0,0]]).unsqueeze(1).float().to(x.device)
 
         for i in range(nsample):
             metrics, inpainted_result = evaluator.eval_step(x, mask, ground_truth, onehots[i], eval_dataset.image_raw_shape)
@@ -172,8 +172,9 @@ def main():
                               f"{run_path}/images/{n:03d}.png",
                               normalize=True)
             if nsample > 1:
-                all_inpaints = torch.cat(all_inpaints, dim=0)
-                vutils.save_image(all_inpaints,
+                # all_inpaints = torch.cat(all_inpaints, dim=0)
+                all_inpaints_processed = torch.cat(all_inpaints_processed, dim=0)
+                vutils.save_image(all_inpaints_processed,
                                   f"{run_path}/images/{n:03d}_sample.png",
                                   normalize=True)
 

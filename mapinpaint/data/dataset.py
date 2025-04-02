@@ -47,7 +47,7 @@ class Dataset(data.Dataset):
             raise ValueError
 
         img_raw = img.copy()
-        img = self.rotate_img(img, rotation)
+        img = self.rotate_img(img, rotation)  # augmentation
 
         if self.image_raw_shape[0] < self.image_shape[0] and self.image_raw_shape[1] < self.image_shape[1]:
             pad_left = (self.image_shape[0] - self.image_raw_shape[0]) // 2
@@ -77,9 +77,11 @@ class Dataset(data.Dataset):
             index = torch.tensor(0)
         elif 'tunnel' in map_name:
             index = torch.tensor(1)
+        elif 'outdoor' in map_name:
+            index = torch.tensor(2)
         else:
             raise ValueError(f"Unknown map name: {map_name}")
-        map_onehot = F.one_hot(index, num_classes=2).float()
+        map_onehot = F.one_hot(index, num_classes=3).float()
 
         return ground_truth, partial_img, mask_img, map_onehot, (ground_truth_raw, partial_img_raw, mask_img_raw)
 

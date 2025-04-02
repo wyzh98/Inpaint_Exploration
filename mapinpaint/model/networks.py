@@ -26,7 +26,7 @@ class ImageGenerator(nn.Module):
         self.use_cuda = use_cuda
         self.device_ids = device_ids
 
-        self.conv1 = gen_conv(input_dim + 3, cnum, 5, 1, 2)
+        self.conv1 = gen_conv(input_dim + 4, cnum, 5, 1, 2)
         self.conv2_downsample = gen_conv(cnum, cnum * 2, 3, 2, 1)
         self.conv3 = gen_conv(cnum * 2, cnum * 2, 3, 1, 1)
         self.conv4_downsample = gen_conv(cnum * 2, cnum * 4, 3, 2, 1)
