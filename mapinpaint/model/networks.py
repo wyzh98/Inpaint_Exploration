@@ -6,14 +6,12 @@ from torch.nn.utils import weight_norm as weight_norm_fn
 
 
 class Generator(nn.Module):
-    def __init__(self, config, use_cuda, device_ids):
+    def __init__(self, config, use_cuda):
         super(Generator, self).__init__()
         self.input_dim = config['input_dim']
         self.cnum = config['ngf']
         self.use_cuda = use_cuda
-        self.device_ids = device_ids
-
-        self.generator = ImageGenerator(self.input_dim, self.cnum, self.use_cuda, self.device_ids)
+        self.generator = ImageGenerator(self.input_dim, self.cnum, self.use_cuda)
 
     def forward(self, x, mask, onehot):
         x_out = self.generator(x, mask, onehot)
@@ -21,10 +19,9 @@ class Generator(nn.Module):
 
 
 class ImageGenerator(nn.Module):
-    def __init__(self, input_dim, cnum, use_cuda=True, device_ids=None):
+    def __init__(self, input_dim, cnum, use_cuda=True):
         super(ImageGenerator, self).__init__()
         self.use_cuda = use_cuda
-        self.device_ids = device_ids
 
         self.conv1 = gen_conv(input_dim + 4, cnum, 5, 1, 2)
         self.conv2_downsample = gen_conv(cnum, cnum * 2, 3, 2, 1)
@@ -81,12 +78,11 @@ class ImageGenerator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, config, use_cuda=True, device_ids=None):
+    def __init__(self, config, use_cuda=True):
         super(Discriminator, self).__init__()
         self.input_dim = config['input_dim']
         self.cnum = config['ndf']
         self.use_cuda = use_cuda
-        self.device_ids = device_ids
 
         self.dis_conv_module = DisConvModule(self.input_dim, self.cnum)
         self.linear = nn.Linear(self.cnum * 4 * 16 * 16, 1)
@@ -100,10 +96,9 @@ class Discriminator(nn.Module):
 
 
 class DisConvModule(nn.Module):
-    def __init__(self, input_dim, cnum, use_cuda=True, device_ids=None):
+    def __init__(self, input_dim, cnum, use_cuda=True):
         super(DisConvModule, self).__init__()
         self.use_cuda = use_cuda
-        self.device_ids = device_ids
 
         self.conv1 = dis_conv(input_dim, cnum, 5, 2, 2)
         self.conv2 = dis_conv(cnum, cnum * 2, 5, 2, 2)

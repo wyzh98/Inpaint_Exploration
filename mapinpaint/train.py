@@ -30,11 +30,7 @@ def main():
 
     # CUDA configuration
     cuda = config['cuda']
-    device_ids = config['gpu_ids']
     if cuda:
-        os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(i) for i in device_ids)
-        device_ids = list(range(len(device_ids)))
-        config['gpu_ids'] = device_ids
         cudnn.benchmark = True
 
     # Configure checkpoint path
@@ -81,10 +77,10 @@ def main():
 
         # Define the trainer and evaluator
         trainer = Trainer(config)
-        evaluator = Evaluator(config, trainer.netG)
+        evaluator = Evaluator(config, trainer.netG, cuda)
 
         if cuda:
-            trainer = nn.parallel.DataParallel(trainer, device_ids=device_ids)
+            trainer = nn.parallel.DataParallel(trainer)
             trainer_module = trainer.module
         else:
             trainer_module = trainer

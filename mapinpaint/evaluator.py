@@ -15,17 +15,13 @@ from utils.tools import get_config
 
 
 class Evaluator:
-    def __init__(self, config, netG=None, nsample=0):
+    def __init__(self, config, netG, cuda, nsample=0):
         self.config = config
-        self.use_cuda = self.config['cuda']
-        self.device_ids = self.config['gpu_ids']
+        self.use_cuda = cuda
         self.nsample = nsample
-        if netG is not None:
-            self.netG = netG
-        else:
-            self.netG = Generator(self.config['netG'], self.use_cuda, self.device_ids)
+        self.netG = netG
         if self.use_cuda:
-            self.netG.to(self.device_ids[0])
+            self.netG.to('cuda')
 
     @torch.no_grad()
     def eval_step(self, x, mask, ground_truth, onehot, img_raw_size):
@@ -109,20 +105,16 @@ def main():
 
     # CUDA configuration
     cuda = config['cuda']
-    device_ids = config['gpu_ids']
     if cuda:
-        os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(i) for i in device_ids)
-        device_ids = list(range(len(device_ids)))
-        config['gpu_ids'] = device_ids
         cudnn.benchmark = True
     print("Configuration: {}".format(config))
 
     # Define the trainer
-    netG = Generator(config['netG'], cuda, device_ids)
+    netG = Generator(config['netG'], cuda)
     netG.load_state_dict(torch.load(checkpoint_path))
     print("Resume from {}".format(checkpoint_path))
 
-    evaluator = Evaluator(config, netG, nsample)
+    evaluator = Evaluator(config, netG, cuda, nsample)
 
     # Dataset
     # config['eval_data_path'] = '../dataset/kth_test_maps/50052748'
