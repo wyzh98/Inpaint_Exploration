@@ -43,7 +43,7 @@ class Env:
             self.trajectory_y = [self.robot_location[1]]
 
     def import_ground_truth(self, episode_index):
-        map_dir = f'maps_train'
+        map_dir = f'../dataset/maps_train'
         map_list = []
         for root, _, files in os.walk(map_dir):
             for file in files:
@@ -109,7 +109,7 @@ class Env:
 
     def plot_env(self, step):
 
-        plt.subplot(1, 3, 1)
+        plt.subplot(2, 2, 1)
         plt.imshow(self.robot_belief, cmap='gray')
         plt.axis('off')
         plt.plot((self.robot_location[0] - self.belief_origin_x) / self.cell_size,

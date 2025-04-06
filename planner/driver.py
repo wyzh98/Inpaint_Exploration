@@ -29,13 +29,13 @@ def main():
 
     # initialize neural networks
     global_policy_net = PolicyNet(NODE_INPUT_DIM, EMBEDDING_DIM).to(device)
-    global_q_net1 = QNet(NODE_INPUT_DIM + 1, EMBEDDING_DIM).to(device)
-    global_q_net2 = QNet(NODE_INPUT_DIM + 1, EMBEDDING_DIM).to(device)
+    global_q_net1 = QNet(NODE_INPUT_DIM, EMBEDDING_DIM).to(device)
+    global_q_net2 = QNet(NODE_INPUT_DIM, EMBEDDING_DIM).to(device)
     log_alpha = torch.FloatTensor([-2]).to(device)
     log_alpha.requires_grad = True
 
-    global_target_q_net1 = QNet(NODE_INPUT_DIM + 1, EMBEDDING_DIM).to(device)
-    global_target_q_net2 = QNet(NODE_INPUT_DIM + 1, EMBEDDING_DIM).to(device)
+    global_target_q_net1 = QNet(NODE_INPUT_DIM, EMBEDDING_DIM).to(device)
+    global_target_q_net2 = QNet(NODE_INPUT_DIM, EMBEDDING_DIM).to(device)
 
     # initialize optimizers
     global_policy_optimizer = optim.Adam(global_policy_net.parameters(), lr=LR)
@@ -56,7 +56,6 @@ def main():
         global_policy_net.load_state_dict(checkpoint['policy_model'])
         global_q_net1.load_state_dict(checkpoint['q_net1_model'])
         global_q_net2.load_state_dict(checkpoint['q_net2_model'])
-        log_alpha = checkpoint['log_alpha']
         log_alpha = checkpoint['log_alpha']
         log_alpha_optimizer = optim.Adam([log_alpha], lr=1e-4)
 

@@ -6,6 +6,7 @@ from model import PolicyNet
 from worker import Worker
 from parameter import *
 from mapinpaint.model.networks import Generator
+from mapinpaint.evaluator import Evaluator
 
 
 class Runner(object):
@@ -14,21 +15,19 @@ class Runner(object):
         self.device = torch.device('cuda') if USE_GPU else torch.device('cpu')
         self.network = PolicyNet(NODE_INPUT_DIM, EMBEDDING_DIM)
         self.network.to(self.device)
-        self.generator = self.load_generator()
+        self.predictor = self.load_predictor()
 
-    def load_generator(self):
+    def load_predictor(self):
         config_path = f'{generator_path}/config.yaml'
         checkpoint_path = os.path.join(generator_path, [f for f in os.listdir(generator_path)
                                                         if f.startswith('gen') and f.endswith('.pt')][0])
         with open(config_path, 'r') as stream:
             config = yaml.load(stream, Loader=yaml.SafeLoader)
-        self.generator = Generator(config['netG'], USE_GPU_GEN)
-        self.generator.load_state_dict(torch.load(checkpoint_path))
-        if USE_GPU_GEN:
-            self.generator = self.generator.to('cuda')
-        self.generator.eval()
+        generator = Generator(config['netG'], USE_GPU_GEN)
+        generator.load_state_dict(torch.load(checkpoint_path))
+        self.predictor = Evaluator(config, generator, USE_GPU_GEN, N_GEN_SAMPLE)
         print("Map predictor loaded from {}".format(checkpoint_path))
-        return self.generator
+        return self.predictor
 
     def get_weights(self):
         return self.network.state_dict()
@@ -39,7 +38,8 @@ class Runner(object):
     def do_job(self, episode_number):
         save_img = True if episode_number % SAVE_IMG_GAP == 0 else False
         # save_img = True
-        worker = Worker(self.meta_agent_id, self.network, self.generator, episode_number, device=self.device, save_image=save_img)
+        worker = Worker(self.meta_agent_id, self.network, self.predictor, episode_number, device=self.device,
+                        save_image=save_img)
         worker.run_episode()
 
         job_results = worker.episode_buffer

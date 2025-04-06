@@ -7,7 +7,7 @@ import torch.utils.data as data
 from os import listdir
 from PIL import Image
 
-from utils.tools import default_loader, mask_loader, ground_truth_loader, is_image_file, normalize
+from ..utils.tools import default_loader, mask_loader, ground_truth_loader, is_image_file, normalize
 import os
 
 import torchvision.transforms as transforms

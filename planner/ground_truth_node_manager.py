@@ -11,17 +11,19 @@ class GroundTruthNodeManager:
         self.nodes_dict = quads.QuadTree((0, 0), 1000, 1000)
         self.node_manager = node_manager
         self.ground_truth_map_info = ground_truth_map_info
+        self.pred_map_info = None
         self.ground_truth_node_coords = None
         self.ground_truth_node_utility = None
         self.explored_sign = None
-        self.guidepost = None
+        self.pred_prob = None
         self.device = device
         self.plot = plot
 
         self.initialize_graph()
 
-    def get_ground_truth_observation(self, robot_location):
+    def get_ground_truth_observation(self, robot_location, pred_map_info):
         self.update_graph()
+        self.pred_map_info = pred_map_info
 
         all_node_coords = []
         for node in self.node_manager.nodes_dict.__iter__():
@@ -32,11 +34,15 @@ class GroundTruthNodeManager:
         all_node_coords = np.array(all_node_coords).reshape(-1, 2)
         utility = []
         explored_sign = []
+        pred_prob = []
         n_nodes = all_node_coords.shape[0]
         adjacent_matrix = np.ones((n_nodes, n_nodes)).astype(int)
         node_coords_to_check = all_node_coords[:, 0] + all_node_coords[:, 1] * 1j
         for i, coords in enumerate(all_node_coords):
             node = self.nodes_dict.find((coords[0], coords[1])).data
+            cell = get_cell_position_from_coords(coords, self.pred_map_info)
+            prob = self.pred_map_info.map[cell[1], cell[0]]
+            pred_prob.append(prob)
             utility.append(node.utility)
             explored_sign.append(node.explored)
             for neighbor in node.neighbor_set:
@@ -46,6 +52,7 @@ class GroundTruthNodeManager:
 
         utility = np.array(utility)
         explored_sign = np.array(explored_sign)
+        pred_prob = np.array(pred_prob)
 
         indices = np.argwhere(utility > 0).reshape(-1)
         utility_node_coords = all_node_coords[indices]
@@ -72,13 +79,13 @@ class GroundTruthNodeManager:
         self.ground_truth_node_coords = all_node_coords
         self.ground_truth_node_utility = utility
         self.explored_sign = explored_sign
-        self.guidepost = guidepost
+        self.pred_prob = pred_prob
 
         node_coords = all_node_coords
         node_utility = utility.reshape(-1, 1)
+        node_predprob = pred_prob.reshape(-1, 1)
         node_guidepost = explored_sign.reshape(-1, 1)
         node_guidepost2 = guidepost.reshape(-1, 1)
-        current_index = current_index
         edge_mask = adjacent_matrix
         current_edge = neighbor_indices
         n_node = node_coords.shape[0]
@@ -89,7 +96,8 @@ class GroundTruthNodeManager:
                                       axis=-1) / UPDATING_MAP_SIZE / 2
         #node_coords = node_coords / UPDATING_MAP_SIZE / 3
         node_utility = node_utility / (SENSOR_RANGE * 3.14 // FRONTIER_CELL_SIZE)
-        node_inputs = np.concatenate((node_coords, node_utility, node_guidepost, node_guidepost2), axis=1)
+        node_predprob = node_predprob / FREE
+        node_inputs = np.concatenate((node_coords, node_utility, node_predprob, node_guidepost, node_guidepost2), axis=1)
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)
 
         assert node_coords.shape[0] < NODE_PADDING_SIZE, print(node_coords.shape[0], NODE_PADDING_SIZE)
@@ -121,7 +129,8 @@ class GroundTruthNodeManager:
 
         current_index = torch.tensor([current_index]).reshape(1, 1, 1).to(self.device)
 
-        return [node_inputs, node_padding_mask, edge_mask, current_index, current_edge, edge_padding_mask]
+        return [node_inputs, node_padding_mask, edge_mask, current_index, current_edge, edge_padding_mask],\
+               [all_node_coords, utility, guidepost, explored_sign, adjacent_matrix, neighbor_indices]
 
     def add_node_to_dict(self, coords):
         key = (coords[0], coords[1])
@@ -178,7 +187,7 @@ class GroundTruthNodeManager:
         return nodes
 
     def plot_ground_truth_env(self, robot_location):
-        plt.subplot(1, 3, 3)
+        plt.subplot(2, 2, 4)
         plt.imshow(self.ground_truth_map_info.map, cmap='gray')
         plt.axis('off')
         robot = get_cell_position_from_coords(robot_location, self.ground_truth_map_info)
@@ -186,10 +195,20 @@ class GroundTruthNodeManager:
         plt.imshow(self.ground_truth_map_info.map, cmap='gray')
         plt.scatter(nodes[:, 0], nodes[:, 1], c=self.explored_sign, zorder=2)
         plt.plot(robot[0], robot[1], 'mo', markersize=16, zorder=5)
-        guidepost_mask = np.array(self.guidepost, dtype=bool)
-        if guidepost_mask.any():
-            guidepost_nodes = nodes[guidepost_mask]
-            plt.scatter(guidepost_nodes[:, 0], guidepost_nodes[:, 1], c='g', zorder=4)
+
+    def plot_predicted_env(self, robot_location, belief_map):
+        plt.subplot(2, 2, 3)
+        plt.axis('off')
+        plt.imshow(self.pred_map_info.map, cmap='gray')
+        alpha_mask = (belief_map == FREE) * 0.5
+        plt.imshow(belief_map, cmap='Blues', alpha=alpha_mask)
+        nodes = get_cell_position_from_coords(self.ground_truth_node_coords, self.pred_map_info)
+        plt.scatter(nodes[:, 0], nodes[:, 1], c=self.pred_prob, cmap='gray', s=3, zorder=2)
+        for node, prob in zip(nodes, self.pred_prob):
+            prob = int(prob / FREE * N_GEN_SAMPLE)
+            plt.text(node[0], node[1], str(prob), fontsize=8, zorder=3)
+        robot = get_cell_position_from_coords(robot_location, self.pred_map_info)
+        plt.plot(robot[0], robot[1], 'mo', markersize=16, zorder=5)
 
 
 class Node:

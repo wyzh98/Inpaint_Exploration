@@ -152,7 +152,8 @@ def main():
                         mask_e = mask_e.cuda()
                         gt_e = gt_e.cuda()
                         map_onehot_e = map_onehot_e.cuda()
-                    metrics, _ = evaluator.eval_step(x_e, mask_e, gt_e, map_onehot_e, eval_dataset.image_raw_shape)
+                    metrics, _ = evaluator.eval_step(x_e, mask_e, map_onehot_e, eval_dataset.image_raw_shape,
+                                                     gt_e, calc_metrics=True)
                     for k, vl in eval_metrics.items():
                         vl.append(metrics[k])
                 message = 'Eval: [%d] ' % iteration

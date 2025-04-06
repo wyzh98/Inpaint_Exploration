@@ -11,14 +11,14 @@ if not os.path.exists(gifs_path):
 
 
 class Worker:
-    def __init__(self, meta_agent_id, policy_net, generator, global_step, device='cpu', save_image=False):
+    def __init__(self, meta_agent_id, policy_net, predictor, global_step, device='cpu', save_image=False):
         self.meta_agent_id = meta_agent_id
         self.global_step = global_step
         self.save_image = save_image
         self.device = device
 
         self.env = Env(global_step, plot=self.save_image)
-        self.robot = Agent(policy_net, generator, self.device, self.save_image)
+        self.robot = Agent(policy_net, predictor, self.device, self.save_image)
 
         self.ground_truth_node_manager = GroundTruthNodeManager(self.robot.node_manager, self.env.ground_truth_info,
                                                                 device=self.device, plot=self.save_image)
@@ -32,10 +32,12 @@ class Worker:
         done = False
         self.robot.update_planning_state(self.env.belief_info, self.env.robot_location)
         observation = self.robot.get_observation()
-        ground_truth_observation = self.ground_truth_node_manager.get_ground_truth_observation(self.env.robot_location)
+        ground_truth_observation, _ = self.ground_truth_node_manager.get_ground_truth_observation(self.env.robot_location,
+                                                                                                  self.robot.pred_mean_map_info)
 
         if self.save_image:
             self.robot.plot_env()
+            self.robot.pred_node_manager.plot_predicted_env(self.env.robot_location, self.robot.map_info.map)
             self.ground_truth_node_manager.plot_ground_truth_env(self.env.robot_location)
             self.env.plot_env(0)
 
@@ -59,12 +61,13 @@ class Worker:
             self.save_reward_done(reward, done)
 
             observation = self.robot.get_observation()
-            ground_truth_observation = self.ground_truth_node_manager.get_ground_truth_observation(
-                self.env.robot_location)
+            ground_truth_observation, _ = self.ground_truth_node_manager.get_ground_truth_observation(self.env.robot_location,
+                                                                                                      self.robot.pred_mean_map_info)
             self.save_next_observations(observation, ground_truth_observation)
 
             if self.save_image:
                 self.robot.plot_env()
+                self.robot.pred_node_manager.plot_predicted_env(self.env.robot_location, self.robot.map_info.map)
                 self.ground_truth_node_manager.plot_ground_truth_env(self.env.robot_location)
                 self.env.plot_env(i+1)
 
@@ -132,6 +135,7 @@ if __name__ == "__main__":
     import yaml
     import os
     from mapinpaint.model.networks import Generator
+    from mapinpaint.evaluator import Evaluator
 
     torch.manual_seed(4777)
     np.random.seed(4777)
@@ -146,8 +150,10 @@ if __name__ == "__main__":
     checkpoint_path = os.path.join(generator_path, [f for f in os.listdir(generator_path)
                                                     if f.startswith('gen') and f.endswith('.pt')][0])
     netG.load_state_dict(torch.load(checkpoint_path))
+    evaluator = Evaluator(config, netG, USE_GPU_GEN, N_GEN_SAMPLE)
+
     if USE_GPU_GEN:
         netG = netG.to('cuda')
     netG.eval()
-    worker = Worker(0, model, netG, 77, save_image=False)
+    worker = Worker(0, model, evaluator, 77, save_image=True)
     worker.run_episode()

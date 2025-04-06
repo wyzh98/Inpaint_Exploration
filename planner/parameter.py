@@ -1,10 +1,10 @@
 # saving path
 FOLDER_NAME = 'ariadne'
-model_path = f'../checkpoint/{FOLDER_NAME}'
+model_path = f'../checkpoints/{FOLDER_NAME}'
 train_path = f'{model_path}/train'
 gifs_path = f'{model_path}/gifs'
 
-# generator settings
+# predictor settings
 generator_path = f'../checkpoints/wgan_3000'
 N_GEN_SAMPLE = 4  # how many samples do you want to generate
 
@@ -41,12 +41,12 @@ GAMMA = 1
 NUM_META_AGENT = 16  # how many threads does your CPU have
 
 # network parameters
-NODE_INPUT_DIM = 4
+NODE_INPUT_DIM = 6
 EMBEDDING_DIM = 128
 
 # Graph parameters
 K_SIZE = 25  # the number of neighboring nodes, fixed
-NODE_PADDING_SIZE = 520  # the number of nodes will be padded to this value, need it for batch training
+NODE_PADDING_SIZE = 600  # the number of nodes will be padded to this value, need it for batch training
 
 # GPU usage
 USE_GPU = False  # do you want to collect training data using GPUs (better not)
