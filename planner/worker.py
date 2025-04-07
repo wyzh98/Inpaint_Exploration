@@ -55,7 +55,7 @@ class Worker:
             reward = self.env.step(next_location)
 
             self.robot.update_planning_state(self.env.belief_info, self.env.robot_location)
-            if self.robot.utility.sum() == 0:
+            if not (self.robot.utility > 0).any():
                 done = True
                 reward += 20
             self.save_reward_done(reward, done)
@@ -146,13 +146,13 @@ if __name__ == "__main__":
     config_path = f'{generator_path}/config.yaml'
     with open(config_path, 'r') as stream:
         config = yaml.load(stream, Loader=yaml.SafeLoader)
-    netG = Generator(config['netG'], USE_GPU_GEN)
+    netG = Generator(config['netG'], USE_GPU)
     checkpoint_path = os.path.join(generator_path, [f for f in os.listdir(generator_path)
                                                     if f.startswith('gen') and f.endswith('.pt')][0])
     netG.load_state_dict(torch.load(checkpoint_path))
-    evaluator = Evaluator(config, netG, USE_GPU_GEN, N_GEN_SAMPLE)
+    evaluator = Evaluator(config, netG, USE_GPU, N_GEN_SAMPLE)
 
-    if USE_GPU_GEN:
+    if USE_GPU:
         netG = netG.to('cuda')
     netG.eval()
     worker = Worker(0, model, evaluator, 77, save_image=True)
