@@ -43,7 +43,7 @@ class Env:
             self.trajectory_y = [self.robot_location[1]]
 
     def import_ground_truth(self, episode_index):
-        map_dir = f'../dataset/maps_train'
+        map_dir = f'dataset/maps_train'
         map_list = []
         for root, _, files in os.walk(map_dir):
             for file in files:

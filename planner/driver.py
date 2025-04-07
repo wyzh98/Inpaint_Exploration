@@ -7,6 +7,9 @@ import os
 import numpy as np
 import random
 import wandb
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from model import PolicyNet, QNet
 from runner import RLRunner
@@ -309,7 +312,7 @@ def main():
                               "log_alpha_optimizer": log_alpha_optimizer.state_dict(),
                               "episode": curr_episode,
                               }
-                path_checkpoint = "./" + model_path + "/checkpoint.pth"
+                path_checkpoint = model_path + "/checkpoint.pth"
                 torch.save(checkpoint, path_checkpoint)
                 print('Saved model', end='\n')
 

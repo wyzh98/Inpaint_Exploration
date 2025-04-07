@@ -46,11 +46,10 @@ EMBEDDING_DIM = 128
 
 # Graph parameters
 K_SIZE = 25  # the number of neighboring nodes, fixed
-NODE_PADDING_SIZE = 600  # the number of nodes will be padded to this value, need it for batch training
+NODE_PADDING_SIZE = 650  # the number of nodes will be padded to this value, need it for batch training
 
 # GPU usage
 USE_GPU = False  # do you want to collect training data using GPUs (better not)
-USE_GPU_GEN = True  # do you want to put generator on GPU during data collection
 USE_GPU_GLOBAL = True  # do you want to train the network using GPUs
 NUM_GPU = 0  # 0 unless you want to collect data using GPUs
 

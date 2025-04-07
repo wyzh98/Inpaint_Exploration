@@ -23,9 +23,9 @@ class Runner(object):
                                                         if f.startswith('gen') and f.endswith('.pt')][0])
         with open(config_path, 'r') as stream:
             config = yaml.load(stream, Loader=yaml.SafeLoader)
-        generator = Generator(config['netG'], USE_GPU_GEN)
-        generator.load_state_dict(torch.load(checkpoint_path))
-        self.predictor = Evaluator(config, generator, USE_GPU_GEN, N_GEN_SAMPLE)
+        generator = Generator(config['netG'], USE_GPU)
+        generator.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
+        self.predictor = Evaluator(config, generator, USE_GPU, N_GEN_SAMPLE)
         print("Map predictor loaded from {}".format(checkpoint_path))
         return self.predictor
 
