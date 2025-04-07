@@ -1,11 +1,11 @@
 # saving path
-FOLDER_NAME = 'ariadne'
-model_path = f'../checkpoints/{FOLDER_NAME}'
+FOLDER_NAME = 'pred'
+model_path = f'checkpoints/{FOLDER_NAME}'
 train_path = f'{model_path}/train'
 gifs_path = f'{model_path}/gifs'
 
 # predictor settings
-generator_path = f'../checkpoints/wgan_3000'
+generator_path = f'checkpoints/wgan_3000'
 N_GEN_SAMPLE = 4  # how many samples do you want to generate
 
 # save training data

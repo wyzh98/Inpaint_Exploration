@@ -55,9 +55,10 @@ class Evaluator:
     @staticmethod
     def post_process(inpaint, x, kernel_size=5, return_tensor=False):
         unique_values, counts = torch.unique(x, return_counts=True)
-        top3_indices = torch.topk(counts, k=3).indices
-        top3_values = unique_values[top3_indices]
-        obs_v, free_v = top3_values.min(), top3_values.max()
+        k = min(3, counts.size(0))
+        topk_indices = torch.topk(counts, k=k).indices
+        topk_values = unique_values[topk_indices]
+        obs_v, free_v = topk_values.min(), topk_values.max()
 
         inpaint = torch.where(inpaint > -0.3, free_v, obs_v)  # binarization
         binary_img = inpaint.cpu().numpy()[0, 0]
