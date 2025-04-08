@@ -109,7 +109,7 @@ class Env:
 
     def plot_env(self, step):
 
-        plt.subplot(2, 2, 1)
+        plt.subplot(1, 4, 1)
         plt.imshow(self.robot_belief, cmap='gray')
         plt.axis('off')
         plt.plot((self.robot_location[0] - self.belief_origin_x) / self.cell_size,

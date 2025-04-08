@@ -36,12 +36,12 @@ class Evaluator:
             i_right = i_left + img_raw_size[0]
             i_bottom = i_top + img_raw_size[1]
             # x = x[:, :, i_left:i_right, i_top:i_bottom]
-            # ground_truth = ground_truth[:, :, i_left:i_right, i_top:i_bottom]
+            ground_truth = ground_truth[:, :, i_left:i_right, i_top:i_bottom]
             inpainted_result = inpainted_result[:, :, i_left:i_right, i_top:i_bottom]
         else:
             # reshape
             # x = F.interpolate(x, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
-            # ground_truth = F.interpolate(ground_truth, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
+            ground_truth = F.interpolate(ground_truth, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
             inpainted_result = F.interpolate(inpainted_result, size=(img_raw_size[1], img_raw_size[0]), mode='bilinear', align_corners=False)
 
         if calc_metrics:

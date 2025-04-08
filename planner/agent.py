@@ -191,8 +191,8 @@ class Agent:
     def plot_env(self):
         plt.switch_backend('agg')
 
-        plt.figure(figsize=(10, 10))
-        plt.subplot(2, 2, 2)
+        plt.figure(figsize=(19, 5))
+        plt.subplot(1, 4, 2)
         plt.axis('off')
 
         nodes = get_cell_position_from_coords(self.node_coords, self.map_info)

@@ -187,7 +187,7 @@ class GroundTruthNodeManager:
         return nodes
 
     def plot_ground_truth_env(self, robot_location):
-        plt.subplot(2, 2, 4)
+        plt.subplot(1, 4, 4)
         plt.imshow(self.ground_truth_map_info.map, cmap='gray')
         plt.axis('off')
         robot = get_cell_position_from_coords(robot_location, self.ground_truth_map_info)
@@ -197,7 +197,7 @@ class GroundTruthNodeManager:
         plt.plot(robot[0], robot[1], 'mo', markersize=16, zorder=5)
 
     def plot_predicted_env(self, robot_location, belief_map):
-        plt.subplot(2, 2, 3)
+        plt.subplot(1, 4, 3)
         plt.axis('off')
         plt.imshow(self.pred_map_info.map, cmap='gray')
         alpha_mask = (belief_map == FREE) * 0.5

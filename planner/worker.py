@@ -140,8 +140,9 @@ if __name__ == "__main__":
     torch.manual_seed(4777)
     np.random.seed(4777)
     model = PolicyNet(NODE_INPUT_DIM, EMBEDDING_DIM)
-    # checkpoint = torch.load(model_path + '/checkpoint.pth', map_location='cpu')
+    # checkpoint = torch.load('../' + model_path + '/checkpoint.pth', map_location='cpu')
     # model.load_state_dict(checkpoint['policy_model'])
+    # generator_path = '../' + generator_path
 
     config_path = f'{generator_path}/config.yaml'
     with open(config_path, 'r') as stream:
