@@ -1,6 +1,7 @@
 import torch
 import torch.optim as optim
 import torch.nn as nn
+from torch.cuda.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 import ray
 import os
@@ -101,6 +102,9 @@ def main():
     dp_q_net2 = nn.DataParallel(global_q_net2)
     dp_target_q_net1 = nn.DataParallel(global_target_q_net1)
     dp_target_q_net2 = nn.DataParallel(global_target_q_net2)
+
+    # mixed precision training
+    scaler = GradScaler()
 
     # launch the first job on each runner
     job_list = []
@@ -207,59 +211,71 @@ def main():
 
                     # SAC
                     with torch.no_grad():
-                        q_values1 = dp_q_net1(*critic_observation)
-                        q_values2 = dp_q_net2(*critic_observation)
-                        q_values = torch.min(q_values1, q_values2)
+                        with autocast():
+                            q_values1 = dp_q_net1(*critic_observation)
+                            q_values2 = dp_q_net2(*critic_observation)
+                            q_values = torch.min(q_values1, q_values2)
 
-                    logp = dp_policy(*observation)
-                    policy_loss = torch.sum(
-                        (logp.exp().unsqueeze(2) * (log_alpha.exp().detach() * logp.unsqueeze(2) - q_values.detach())),
-                        dim=1).mean()
+                    with autocast():
+                        logp = dp_policy(*observation)
+                        policy_loss = torch.sum(
+                            (logp.exp().unsqueeze(2) * (log_alpha.exp().detach() * logp.unsqueeze(2) - q_values.detach())),
+                            dim=1).mean()
 
                     global_policy_optimizer.zero_grad()
-                    policy_loss.backward()
+                    scaler.scale(policy_loss).backward()
+                    scaler.unscale_(global_policy_optimizer)
                     policy_grad_norm = torch.nn.utils.clip_grad_norm_(global_policy_net.parameters(), max_norm=100,
                                                                       norm_type=2)
-                    global_policy_optimizer.step()
+                    scaler.step(global_policy_optimizer)
+                    scaler.update()
 
                     with torch.no_grad():
-                        next_logp = dp_policy(*next_observation)
-                        next_q_values1 = dp_target_q_net1(*critic_next_observation)
-                        next_q_values2 = dp_target_q_net2(*critic_next_observation)
-                        next_q_values = torch.min(next_q_values1, next_q_values2)
-                        value_prime = torch.sum(
-                            next_logp.unsqueeze(2).exp() * (next_q_values - log_alpha.exp() * next_logp.unsqueeze(2)),
-                            dim=1).unsqueeze(1)
-                        target_q = reward + GAMMA * (1 - done) * value_prime
+                        with autocast():
+                            next_logp = dp_policy(*next_observation)
+                            next_q_values1 = dp_target_q_net1(*critic_next_observation)
+                            next_q_values2 = dp_target_q_net2(*critic_next_observation)
+                            next_q_values = torch.min(next_q_values1, next_q_values2)
+                            value_prime = torch.sum(
+                                next_logp.unsqueeze(2).exp() * (next_q_values - log_alpha.exp() * next_logp.unsqueeze(2)),
+                                dim=1).unsqueeze(1)
+                            target_q = reward + GAMMA * (1 - done) * value_prime
 
                     mse_loss = nn.MSELoss()
 
-                    q_values1 = dp_q_net1(*critic_observation)
-                    q1 = torch.gather(q_values1, 1, action)
-                    q1_loss = mse_loss(q1, target_q.detach()).mean()
+                    with autocast():
+                        q_values1 = dp_q_net1(*critic_observation)
+                        q1 = torch.gather(q_values1, 1, action)
+                        q1_loss = mse_loss(q1, target_q.detach()).mean()
 
                     global_q_net1_optimizer.zero_grad()
-                    q1_loss.backward()
+                    scaler.scale(q1_loss).backward()
                     q_grad_norm = torch.nn.utils.clip_grad_norm_(global_q_net1.parameters(), max_norm=20000,
                                                                  norm_type=2)
-                    global_q_net1_optimizer.step()
+                    scaler.step(global_q_net1_optimizer)
+                    scaler.update()
 
-                    q_values2 = dp_q_net2(*critic_observation)
-                    q2 = torch.gather(q_values2, 1, action)
-                    q2_loss = mse_loss(q2, target_q.detach()).mean()
+                    with autocast():
+                        q_values2 = dp_q_net2(*critic_observation)
+                        q2 = torch.gather(q_values2, 1, action)
+                        q2_loss = mse_loss(q2, target_q.detach()).mean()
 
                     global_q_net2_optimizer.zero_grad()
-                    q2_loss.backward()
+                    scaler.scale(q2_loss).backward()
+                    scaler.unscale_(global_q_net2_optimizer)
                     q_grad_norm = torch.nn.utils.clip_grad_norm_(global_q_net2.parameters(), max_norm=20000,
                                                                  norm_type=2)
-                    global_q_net2_optimizer.step()
+                    scaler.step(global_q_net2_optimizer)
+                    scaler.update()
 
-                    entropy = (logp * logp.exp()).sum(dim=-1)
-                    alpha_loss = -(log_alpha * (entropy.detach() + entropy_target)).mean()
+                    with autocast():
+                        entropy = (logp * logp.exp()).sum(dim=-1)
+                        alpha_loss = -(log_alpha * (entropy.detach() + entropy_target)).mean()
 
                     log_alpha_optimizer.zero_grad()
-                    alpha_loss.backward()
-                    log_alpha_optimizer.step()
+                    scaler.scale(alpha_loss).backward()
+                    scaler.step(log_alpha_optimizer)
+                    scaler.update()
 
                     target_q_update_counter += 1
                     # print("target q update counter", target_q_update_counter % 1024)

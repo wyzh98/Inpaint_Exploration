@@ -42,7 +42,7 @@ class SingleHeadAttention(nn.Module):
         U = self.tanh_clipping * torch.tanh(U)
 
         if mask is not None:
-            U = U.masked_fill(mask == 1, -1e8)
+            U = U.masked_fill(mask == 1, -6e4)
         attention = torch.log_softmax(U, dim=-1)  # n_batch*n_query*n_key
 
         return attention
@@ -111,7 +111,7 @@ class MultiHeadAttention(nn.Module):
             mask = None
 
         if mask is not None:
-            U = U.masked_fill(mask > 0, -1e8)
+            U = U.masked_fill(mask > 0, -6e4)
 
         attention = torch.softmax(U, dim=-1)  # n_heads*batch_size*n_query*targets_size
 

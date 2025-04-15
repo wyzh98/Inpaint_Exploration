@@ -55,7 +55,7 @@ class Worker:
             reward = self.env.step(next_location)
 
             self.robot.update_planning_state(self.env.belief_info, self.env.robot_location)
-            if not (self.robot.utility > 0).any():
+            if not (self.robot.utility > 0).any() or self.env.explored_rate > 0.9999:
                 done = True
                 reward += 20
             self.save_reward_done(reward, done)

@@ -1,5 +1,5 @@
 # saving path
-FOLDER_NAME = 'pred'
+FOLDER_NAME = 'pred4'
 model_path = f'checkpoints/{FOLDER_NAME}'
 train_path = f'{model_path}/train'
 gifs_path = f'{model_path}/gifs'
@@ -11,7 +11,7 @@ N_GEN_SAMPLE = 4  # how many samples do you want to generate
 # save training data
 SUMMARY_WINDOW = 32  # how many training steps before writing data to tensorboard
 LOAD_MODEL = False  # do you want to load the model trained before
-SAVE_IMG_GAP = 100  # how many episodes before saving a gif
+SAVE_IMG_GAP = 500  # how many episodes before saving a gif
 
 # map and planning resolution
 CELL_SIZE = 0.4  # meter, your map resolution
@@ -35,7 +35,7 @@ UPDATING_MAP_SIZE = 4 * SENSOR_RANGE + 4 * NODE_RESOLUTION  # nodes outside this
 MAX_EPISODE_STEP = 128
 REPLAY_SIZE = 10000
 MINIMUM_BUFFER_SIZE = 2000
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 LR = 1e-5
 GAMMA = 1
 NUM_META_AGENT = 16  # how many threads does your CPU have
