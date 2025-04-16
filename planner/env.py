@@ -10,9 +10,10 @@ from utils import *
 
 
 class Env:
-    def __init__(self, episode_index, plot=False):
+    def __init__(self, episode_index, plot=False, test=False):
         self.episode_index = episode_index
         self.plot = plot
+        self.test = test
         self.ground_truth, self.robot_cell, self.map_path = self.import_ground_truth(episode_index)
         self.ground_truth_size = np.shape(self.ground_truth)  # cell
         self.cell_size = CELL_SIZE  # meter
@@ -43,13 +44,14 @@ class Env:
             self.trajectory_y = [self.robot_location[1]]
 
     def import_ground_truth(self, episode_index):
-        map_dir = f'dataset/maps_train'
+        map_dir = f'dataset/maps_train' if not self.test else f'dataset/maps_eval'
         map_list = []
         for root, _, files in os.walk(map_dir):
             for file in files:
                 map_list.append(os.path.join(root, file))
-        rng = random.Random(1)
-        rng.shuffle(map_list)
+        if not self.test:
+            rng = random.Random(1)
+            rng.shuffle(map_list)
 
         map_index = episode_index % np.size(map_list)
         ground_truth = (io.imread(map_list[map_index], 1)).astype(int)

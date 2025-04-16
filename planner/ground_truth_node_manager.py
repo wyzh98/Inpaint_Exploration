@@ -18,6 +18,7 @@ class GroundTruthNodeManager:
         self.pred_prob = None
         self.device = device
         self.plot = plot
+        self.path_to_nearest_frontier = None
 
         self.initialize_graph()
 
@@ -66,8 +67,8 @@ class GroundTruthNodeManager:
                 if dist < nearest_dist:
                     nearest_dist = dist
                     nearest_utility_coords = end
-        path_coords, _ = get_Dijkstra_path_and_dist(dist_dict, prev_dict, nearest_utility_coords)
-        for coords in path_coords:
+        self.path_to_nearest_frontier, _ = get_Dijkstra_path_and_dist(dist_dict, prev_dict, nearest_utility_coords)
+        for coords in self.path_to_nearest_frontier:
             coords_index = np.argwhere(node_coords_to_check == coords[0] + coords[1] * 1j)
             if coords_index:
                 index = coords_index[0]
