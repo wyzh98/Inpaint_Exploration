@@ -84,9 +84,9 @@ def run_test():
         print('| Average success rate:', np.array(success_rate).mean())
         print('| Average travel distance:', np.array(travel_dist).mean())
         print('| Average explored rate:', np.array(explored_rate).mean())
-        print('| Room success rate and travel distance:\t', np.array(sr_room).mean(), np.array(td_room).mean())
-        print('| Tunnel success rate and travel distance:\t', np.array(sr_tunnel).mean(), np.array(td_tunnel).mean())
-        print('| Outdoor success rate and travel distance:\t', np.array(sr_outdoor).mean(), np.array(td_outdoor).mean())
+        print('| Room success rate: {}, travel distance: {:.2f} ± {:.2f}'.format(np.mean(sr_room), np.mean(td_room), np.std(td_room)))
+        print('| Tunnel success rate: {}, travel distance: {:.2f} ± {:.2f}'.format(np.mean(sr_tunnel), np.mean(td_tunnel), np.std(td_tunnel)))
+        print('| Outdoor success rate: {}, travel distance: {:.2f} ± {:.2f}'.format(np.mean(sr_outdoor), np.mean(td_outdoor), np.std(td_outdoor)))
 
 
     except KeyboardInterrupt:

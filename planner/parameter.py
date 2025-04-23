@@ -1,5 +1,5 @@
 # saving path
-FOLDER_NAME = 'pred4'
+FOLDER_NAME = 'pred7'
 model_path = f'checkpoints/{FOLDER_NAME}'
 train_path = f'{model_path}/train'
 gifs_path = f'{model_path}/gifs'
